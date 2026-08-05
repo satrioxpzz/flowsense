@@ -76,3 +76,37 @@ def test_postgres_sink(monkeypatch):
     assert p[2] == 2  # total_vehicles
     assert conn.committed
 
+
+class FakeS3Client:
+    def __init__(self):
+        self.uploads = []
+
+    def put_object(self, Bucket, Key, Body, ContentType):
+        self.uploads.append((Bucket, Key, Body, ContentType))
+
+
+def test_s3_snapshot_sink(monkeypatch):
+    import sys
+    import types
+
+    if "boto3" not in sys.modules or sys.modules["boto3"] is None:
+        dummy_boto3 = types.ModuleType("boto3")
+        sys.modules["boto3"] = dummy_boto3
+
+    import boto3
+    from flowsense.sink import S3SnapshotSink
+
+    client = FakeS3Client()
+    monkeypatch.setattr(boto3, "client", lambda *args, **kwargs: client, raising=False)
+
+    sink = S3SnapshotSink(endpoint_url="http://x", access_key="a", secret_key="b", bucket="snaps")
+    sink.save("cam1", 100.5, b"img")
+
+    assert len(client.uploads) == 1
+    bucket, key, body, ctype = client.uploads[0]
+    assert bucket == "snaps"
+    assert "cam1_100" in key
+    assert body == b"img"
+    assert ctype == "image/jpeg"
+
+
