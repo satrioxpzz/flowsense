@@ -24,6 +24,7 @@ class DetectionBase(BaseModel):
     total_vehicles: int
     per_lane: Dict[str, Any]
     crossings: Dict[str, Any]
+    density: Optional[Dict[str, Any]] = None
 
 class DetectionCreate(DetectionBase):
     pass
