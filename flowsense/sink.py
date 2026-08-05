@@ -1,5 +1,8 @@
 import json
 from pathlib import Path
+import psycopg
+import boto3
+from datetime import datetime, timezone
 
 class RecordSink:
     def emit(self, record: dict):
@@ -23,33 +26,28 @@ class SnapshotSink:
 class PostgresSink(RecordSink):
     def __init__(self, conn_str: str):
         self.conn_str = conn_str
+        self.conn = psycopg.connect(self.conn_str)
 
     def emit(self, record: dict):
-        import psycopg
-        from datetime import datetime, timezone
-
-        with psycopg.connect(self.conn_str) as conn:
-            with conn.cursor() as cur:
-                ts = datetime.fromtimestamp(record["ts"], tz=timezone.utc)
-                cur.execute(
-                    "INSERT INTO detections (camera_id, timestamp, total_vehicles, per_lane, crossings, density) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (
-                        record["camera_id"],
-                        ts,
-                        record["total_vehicles"],
-                        json.dumps(record.get("per_lane", {})),
-                        json.dumps(record.get("crossings", {})),
-                        json.dumps(record.get("density", {})),
-                    ),
-                )
-            conn.commit()
+        with self.conn.cursor() as cur:
+            ts = datetime.fromtimestamp(record["ts"], tz=timezone.utc)
+            cur.execute(
+                "INSERT INTO detections (camera_id, timestamp, total_vehicles, per_lane, crossings, density) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (
+                    record["camera_id"],
+                    ts,
+                    record["total_vehicles"],
+                    json.dumps(record.get("per_lane", {})),
+                    json.dumps(record.get("crossings", {})),
+                    json.dumps(record.get("density", {})),
+                ),
+            )
+        self.conn.commit()
 
 
 class S3SnapshotSink(SnapshotSink):
     def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str):
-        import boto3
-
         self.bucket = bucket
         self.client = boto3.client(
             "s3",
