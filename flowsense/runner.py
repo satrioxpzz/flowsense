@@ -16,6 +16,7 @@ from .counter import TrackingCounter
 from .density import classify_density
 from .detector import load_model, summarize_frame, track_summary
 from .lanes import load_rois
+from .sink import JsonlSink, PostgresSink, S3SnapshotSink
 from .stream import ReconnectingStream
 from .telemetry import setup_logging
 
@@ -30,6 +31,8 @@ def parse_args(argv=None):
     ap.add_argument("--out", help="output .jsonl file")
     ap.add_argument("--model", help="yolo weights path (default: config FLOWSENSE_MODEL)")
     ap.add_argument("--interval", type=float, help="seconds between records (default: config)")
+    ap.add_argument("--sink", default="jsonl", help="comma-separated sinks to emit records to: jsonl, postgres")
+    ap.add_argument("--snapshot", action="store_true", help="save snapshot frames to S3 sink")
     ap.add_argument("--track", action="store_true",
                     help="use YOLO tracking to count unique lane crossings")
     ap.add_argument("--snapshot-only", action="store_true",
@@ -111,51 +114,69 @@ def main(argv=None) -> int:
     stream = ReconnectingStream(cam["url"])
     stream.open()
     out_path = Path(args.out) if args.out else cfg.data_dir / f"connector_{camera_key}.jsonl"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    record_sinks = []
+    if "jsonl" in args.sink:
+        record_sinks.append(JsonlSink(out_path))
+    if "postgres" in args.sink and cfg.db_url:
+        record_sinks.append(PostgresSink(cfg.db_url))
+
+    snap_sink = None
+    if getattr(args, 'snapshot', False) and cfg.s3_endpoint:
+        snap_sink = S3SnapshotSink(cfg.s3_endpoint, cfg.s3_access_key, cfg.s3_secret_key, cfg.s3_bucket)
 
     counter = TrackingCounter() if args.track else None
     last_emit = 0.0
     try:
-        with open(out_path, "a", encoding="utf-8") as f:
-            while True:
-                ok, frame = stream.read()
-                if not ok:
-                    log.error("stream lost after reconnects; giving up")
+        while True:
+            ok, frame = stream.read()
+            if not ok:
+                log.error("stream lost after reconnects; giving up")
+                break
+
+            now = time.time()
+            summary = {}
+            crossings = None
+            if model is not None:
+                if args.track:
+                    results = model.track(frame, persist=True, verbose=False)
+                    dets, pairs = track_summary(results, lanes, cfg.min_conf)
+                    summary = {
+                        "total_vehicles": len(dets),
+                        "per_lane": per_lane_present(dets),
+                        "vehicles": dets,
+                    }
+                    crossings = counter.update(pairs)
+                else:
+                    results = model(frame, verbose=False)
+                    summary = summarize_frame(results, lanes, cfg.min_conf)
+
+            if now - last_emit >= cfg.interval:
+                density = classify_density(summary.get("per_lane", {}))
+                record = build_record(now, cam, summary, crossings, density)
+                for sink in record_sinks:
+                    try:
+                        sink.emit(record)
+                    except Exception as e:
+                        log.error("sink error", exc_info=True)
+                if snap_sink:
+                    ok_enc, buf = cv2.imencode('.jpg', frame)
+                    if ok_enc:
+                        try:
+                            snap_sink.save(camera_key, now, buf.tobytes())
+                        except Exception as e:
+                            log.error("snap error", exc_info=True)
+                last_emit = now
+                log.info("record", extra={"camera_id": camera_key, "event": json.dumps(record)})
+
+            if args.show and model is not None:
+                view = annotate(frame.copy(), lanes, summary)
+                cv2.imshow("flowsense", view)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
-                now = time.time()
-                summary = {}
-                crossings = None
-                if model is not None:
-                    if args.track:
-                        results = model.track(frame, persist=True, verbose=False)
-                        dets, pairs = track_summary(results, lanes, cfg.min_conf)
-                        summary = {
-                            "total_vehicles": len(dets),
-                            "per_lane": per_lane_present(dets),
-                            "vehicles": dets,
-                        }
-                        crossings = counter.update(pairs)
-                    else:
-                        results = model(frame, verbose=False)
-                        summary = summarize_frame(results, lanes, cfg.min_conf)
-
-                if now - last_emit >= cfg.interval:
-                    density = classify_density(summary.get("per_lane", {}))
-                    record = build_record(now, cam, summary, crossings, density)
-                    f.write(json.dumps(record, separators=(",", ":")) + "\n")
-                    f.flush()
-                    last_emit = now
-                    log.info("record", extra={"camera_id": camera_key, "event": json.dumps(record)})
-
-                if args.show and model is not None:
-                    view = annotate(frame.copy(), lanes, summary)
-                    cv2.imshow("flowsense", view)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
-
-                if args.snapshot_only:
-                    break
+            if args.snapshot_only:
+                break
     except KeyboardInterrupt:
         log.info("interrupted; shutting down")
     finally:
