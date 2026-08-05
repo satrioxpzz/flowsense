@@ -28,6 +28,11 @@ class Config:
     min_conf: float = 0.35
     interval: float = 2.0
     model_path: str = "yolo11n.pt"
+    db_url: str = ""
+    s3_endpoint: str = ""
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_bucket: str = ""
     base_dir: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent)
 
     @property
@@ -51,4 +56,10 @@ def load_config(env_path: Path = DEFAULT_ENV_PATH) -> Config:
         min_conf=float(os.environ.get("FLOWSENSE_MIN_CONF", defaults.min_conf)),
         interval=float(os.environ.get("FLOWSENSE_INTERVAL", defaults.interval)),
         model_path=os.environ.get("FLOWSENSE_MODEL", defaults.model_path),
+        db_url=os.environ.get("FLOWSENSE_DB_URL", defaults.db_url),
+        s3_endpoint=os.environ.get("FLOWSENSE_S3_ENDPOINT", defaults.s3_endpoint),
+        s3_access_key=os.environ.get("FLOWSENSE_S3_ACCESS_KEY", defaults.s3_access_key),
+        s3_secret_key=os.environ.get("FLOWSENSE_S3_SECRET_KEY", defaults.s3_secret_key),
+        s3_bucket=os.environ.get("FLOWSENSE_S3_BUCKET", defaults.s3_bucket),
     )
+
