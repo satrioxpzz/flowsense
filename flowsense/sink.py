@@ -18,3 +18,30 @@ class JsonlSink(RecordSink):
 class SnapshotSink:
     def save(self, camera_id: str, ts: float, frame_bytes: bytes):
         raise NotImplementedError
+
+
+class PostgresSink(RecordSink):
+    def __init__(self, conn_str: str):
+        self.conn_str = conn_str
+
+    def emit(self, record: dict):
+        import psycopg
+        from datetime import datetime, timezone
+
+        with psycopg.connect(self.conn_str) as conn:
+            with conn.cursor() as cur:
+                ts = datetime.fromtimestamp(record["ts"], tz=timezone.utc)
+                cur.execute(
+                    "INSERT INTO detections (camera_id, timestamp, total_vehicles, per_lane, crossings, density) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (
+                        record["camera_id"],
+                        ts,
+                        record["total_vehicles"],
+                        json.dumps(record.get("per_lane", {})),
+                        json.dumps(record.get("crossings", {})),
+                        json.dumps(record.get("density", {})),
+                    ),
+                )
+            conn.commit()
+
