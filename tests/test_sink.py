@@ -46,13 +46,6 @@ class FakeConnection:
 
 
 def test_postgres_sink(monkeypatch):
-    import sys
-    import types
-
-    if "psycopg" not in sys.modules or sys.modules["psycopg"] is None:
-        dummy_psycopg = types.ModuleType("psycopg")
-        sys.modules["psycopg"] = dummy_psycopg
-
     import psycopg
     from flowsense.sink import PostgresSink
 
@@ -86,13 +79,6 @@ class FakeS3Client:
 
 
 def test_s3_snapshot_sink(monkeypatch):
-    import sys
-    import types
-
-    if "boto3" not in sys.modules or sys.modules["boto3"] is None:
-        dummy_boto3 = types.ModuleType("boto3")
-        sys.modules["boto3"] = dummy_boto3
-
     import boto3
     from flowsense.sink import S3SnapshotSink
 

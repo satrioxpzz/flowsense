@@ -118,12 +118,18 @@ def main(argv=None) -> int:
     record_sinks = []
     if "jsonl" in args.sink:
         record_sinks.append(JsonlSink(out_path))
-    if "postgres" in args.sink and cfg.db_url:
-        record_sinks.append(PostgresSink(cfg.db_url))
+    if "postgres" in args.sink:
+        if cfg.db_url:
+            record_sinks.append(PostgresSink(cfg.db_url))
+        else:
+            log.warning("postgres sink requested but db_url configuration is missing")
 
     snap_sink = None
-    if getattr(args, 'snapshot', False) and cfg.s3_endpoint:
-        snap_sink = S3SnapshotSink(cfg.s3_endpoint, cfg.s3_access_key, cfg.s3_secret_key, cfg.s3_bucket)
+    if getattr(args, 'snapshot', False):
+        if cfg.s3_endpoint:
+            snap_sink = S3SnapshotSink(cfg.s3_endpoint, cfg.s3_access_key, cfg.s3_secret_key, cfg.s3_bucket)
+        else:
+            log.warning("snapshot sink requested but s3_endpoint configuration is missing")
 
     counter = TrackingCounter() if args.track else None
     last_emit = 0.0
