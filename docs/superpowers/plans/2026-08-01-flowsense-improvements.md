@@ -1686,8 +1686,8 @@ git commit -m "feat: add per-lane density classification (klasifikasi kepadatan)
 
 The reference diagram extends well beyond the edge connector this plan covers. These are **out of scope for the connector refactor** but are the connector's consumers; the record schema and snapshot output are the contracts they build on.
 
-- **Layer 3 — DATABASE (PostgreSQL + TimescaleDB):** ingest the `.jsonl` records (or stream them directly). Add a `flowsense/sink.py` `RecordSink` interface with a local `.jsonl` implementation (already effectively done by the runner) and a `PostgresSink` using `psycopg`/TimescaleDB. Hypertable on `ts` for the per-minute aggregation ("Agregasi 1 menit") the diagram shows feeding layer 4.
-- **Layer 3b — STORAGE SERVICE (Garage/disk):** persist Snapshot JPEGs (currently only produced in `--snapshot-only` calibration) on a regular cadence to object storage; add a `SnapshotSink` alongside `RecordSink`.
+- [x] **Layer 3 — DATABASE (PostgreSQL + TimescaleDB):** ingest the `.jsonl` records (or stream them directly). Add a `flowsense/sink.py` `RecordSink` interface with a local `.jsonl` implementation (already effectively done by the runner) and a `PostgresSink` using `psycopg`/TimescaleDB. Hypertable on `ts` for the per-minute aggregation ("Agregasi 1 menit") the diagram shows feeding layer 4.
+- [x] **Layer 3b — STORAGE SERVICE (Garage/disk):** persist Snapshot JPEGs (currently only produced in `--snapshot-only` calibration) on a regular cadence to object storage; add a `SnapshotSink` alongside `RecordSink`.
 - **Layer 4 — API/BACKEND (FastAPI + JWT):** serve records/snapshots to operators; JWT auth for the operator flavor. Exposes the per-lane counts that layer 5/6 consume.
 - **Layer 5 — CLIENT (Flutter / Riverpod / flutter_map):** two flavors — `warga` (public) and `operator` (authenticated). Reads from layer 4.
 - **Layer 5/6 — SIMULATION (SUMO + TraCI):** inputs the lane counts from layer 3, outputs wait-time delta ("selisih waktu tunggu"). Reference implementation already in `Reference/sumo-adaptive-traffic-signal-control-main`; wire its input to the connector's per-lane counts.
