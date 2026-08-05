@@ -53,3 +53,51 @@ def test_build_record_with_density():
         density={"kota": "sedang"}
     )
     assert r["density"] == {"kota": "sedang"}
+
+
+def test_parse_args_sink_and_snapshot():
+    args = parse_args(["--sink", "jsonl,postgres", "--snapshot"])
+    assert args.sink == "jsonl,postgres"
+    assert args.snapshot is True
+
+
+def test_main_with_sinks(tmp_path, monkeypatch):
+    import numpy as np
+    from unittest.mock import MagicMock, patch
+
+    out_file = tmp_path / "test_out.jsonl"
+    monkeypatch.setenv("FLOWSENSE_DB_URL", "postgresql://localhost/testdb")
+    monkeypatch.setenv("FLOWSENSE_S3_ENDPOINT", "http://localhost:9000")
+    monkeypatch.setenv("FLOWSENSE_S3_ACCESS_KEY", "access")
+    monkeypatch.setenv("FLOWSENSE_S3_SECRET_KEY", "secret")
+    monkeypatch.setenv("FLOWSENSE_S3_BUCKET", "bucket")
+
+    fake_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    mock_stream = MagicMock()
+    mock_stream.read.return_value = (True, fake_frame)
+
+    with patch("flowsense.runner.ReconnectingStream", return_value=mock_stream), \
+         patch("flowsense.runner.PostgresSink") as mock_pg_cls, \
+         patch("flowsense.runner.S3SnapshotSink") as mock_s3_cls:
+
+        mock_pg_instance = MagicMock()
+        mock_pg_cls.return_value = mock_pg_instance
+        mock_s3_instance = MagicMock()
+        mock_s3_cls.return_value = mock_s3_instance
+
+        from flowsense.runner import main
+        ret = main([
+            "--url", "http://fake.stream/live.m3u8",
+            "--skip-detect",
+            "--snapshot-only",
+            "--sink", "jsonl,postgres",
+            "--snapshot",
+            "--out", str(out_file),
+        ])
+
+        assert ret == 0
+        assert out_file.exists()
+        assert mock_pg_instance.emit.called
+        assert mock_s3_instance.save.called
+

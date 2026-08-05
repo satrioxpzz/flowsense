@@ -38,3 +38,14 @@ def test_env_beats_dotenv(tmp_path, monkeypatch):
     monkeypatch.setenv("FLOWSENSE_API_KEY", "real-secret")
     cfg = load_config(env_path=env)
     assert cfg.api_key == "real-secret"
+
+
+def test_db_s3_config_defaults(tmp_path):
+    from flowsense.config import load_config
+    cfg = load_config(env_path=tmp_path / "missing.env")
+    assert cfg.db_url == ""
+    assert cfg.s3_endpoint == ""
+    assert cfg.s3_access_key == ""
+    assert cfg.s3_secret_key == ""
+    assert cfg.s3_bucket == ""
+
