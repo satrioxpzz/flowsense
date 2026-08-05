@@ -13,6 +13,7 @@ import numpy as np
 from .api import fetch_cameras, find_camera
 from .config import load_config
 from .counter import TrackingCounter
+from .density import classify_density
 from .detector import load_model, summarize_frame, track_summary
 from .lanes import load_rois
 from .stream import ReconnectingStream
@@ -42,7 +43,7 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def build_record(ts, camera, summary, crossings=None):
+def build_record(ts, camera, summary, crossings=None, density=None):
     record = {
         "ts": int(ts),
         "camera_id": camera["id"],
@@ -52,6 +53,8 @@ def build_record(ts, camera, summary, crossings=None):
     }
     if crossings is not None:
         record["crossings"] = crossings
+    if density is not None:
+        record["density"] = density
     return record
 
 
@@ -138,7 +141,8 @@ def main(argv=None) -> int:
                         summary = summarize_frame(results, lanes, cfg.min_conf)
 
                 if now - last_emit >= cfg.interval:
-                    record = build_record(now, cam, summary, crossings)
+                    density = classify_density(summary.get("per_lane", {}))
+                    record = build_record(now, cam, summary, crossings, density)
                     f.write(json.dumps(record, separators=(",", ":")) + "\n")
                     f.flush()
                     last_emit = now

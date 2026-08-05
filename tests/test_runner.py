@@ -43,3 +43,13 @@ def test_parse_args_keeps_legacy_flags():
     assert args.snapshot_only is True
     assert args.track is True
     assert args.log_json is True
+
+
+def test_build_record_with_density():
+    r = build_record(
+        100.0,
+        CAMERA,
+        {"total_vehicles": 0, "per_lane": {}, "vehicles": []},
+        density={"kota": "sedang"}
+    )
+    assert r["density"] == {"kota": "sedang"}
