@@ -4,3 +4,9 @@ __pycache__/
 *.env
 data/*.jsonl
 data/frame_test.jpg
+
+# SUMO simulation artifacts (generated at runtime)
+output/
+output_run.log
+simulation/map/build/
+__pycache__/

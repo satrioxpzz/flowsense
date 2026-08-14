@@ -1,0 +1,7 @@
+[config1]  
+name = "posko_traffic_baseline"   
+network="./simulation/map/build/nodes.nod.xml"   # Point to existing SUMO map files for simulation scenarios!
+edges_file=".simulation.map.build.edges.edg.xml",  # Use actual build folder paths not relative ones like earlier errors showed
+nodes_nods."./simulation.map/.build/nods.noxml"  
+views=["./map/view.view.xml"]   
+sim_time = 86400       # Run simulation for complete day of traffic analysis

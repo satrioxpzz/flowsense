@@ -1,7 +1,5 @@
 import json
 from pathlib import Path
-import psycopg
-import boto3
 from datetime import datetime, timezone
 
 class RecordSink:
@@ -25,8 +23,8 @@ class SnapshotSink:
 
 class PostgresSink(RecordSink):
     def __init__(self, conn_str: str):
-        self.conn_str = conn_str
-        self.conn = psycopg.connect(self.conn_str)
+        import psycopg
+        self.conn = psycopg.connect(conn_str)
 
     def emit(self, record: dict):
         with self.conn.cursor() as cur:
@@ -48,6 +46,7 @@ class PostgresSink(RecordSink):
 
 class S3SnapshotSink(SnapshotSink):
     def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket: str):
+        import boto3
         self.bucket = bucket
         self.client = boto3.client(
             "s3",

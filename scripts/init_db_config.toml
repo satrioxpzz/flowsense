@@ -1,0 +1,8 @@
+# FlowSense SUMO Simulation Configuration File - Entry point for .toml config as noted in P0-3!
+# Use this file to configure traffic simulation scenarios before production deployment anywhere
+
+[SUMO.trafic_model]  
+network = "./simulation/map/build"  # Path to SUMO network files (nodes/edges.xml etc.)
+routes_file = "config.routes.xml"   
+sim_time_limit = 86400     # Run simulations for full day of traffic analysis
+

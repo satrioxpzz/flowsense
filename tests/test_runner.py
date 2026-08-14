@@ -1,4 +1,4 @@
-from flowsense.runner import build_record, parse_args, per_lane_present
+from flowsense.runner import build_record, parse_args, per_lane_present, VisionClassifier
 
 CAMERA = {"id": 30, "nama": "Simpang DPRD Arah Kota"}
 
@@ -59,6 +59,55 @@ def test_parse_args_sink_and_snapshot():
     args = parse_args(["--sink", "jsonl,postgres", "--snapshot"])
     assert args.sink == "jsonl,postgres"
     assert args.snapshot is True
+
+
+def test_parse_args_vision_flags():
+    args = parse_args(["--vision", "--vision-interval", "45"])
+    assert args.vision is True
+    assert args.vision_interval == 45.0
+
+
+def test_build_record_with_pedestrians_vision():
+    r = build_record(
+        100.0,
+        CAMERA,
+        {"total_vehicles": 0, "per_lane": {}},
+        pedestrians=[
+            {"track_id": 7, "vision": {"has_mobility_aid": True, "aid_type": "wheelchair"}},
+            {"track_id": 8, "vision": {"has_mobility_aid": False, "aid_type": "none"}},
+            {"track_id": 9},
+        ],
+    )
+    assert r["pedestrians"] == 3
+    assert r["vision"] == [
+        {"track_id": 7, "has_mobility_aid": True, "aid_type": "wheelchair"},
+        {"track_id": 8, "has_mobility_aid": False, "aid_type": "none"},
+    ]
+
+
+def test_build_record_without_pedestrians_omits_vision():
+    r = build_record(100.0, CAMERA, {"total_vehicles": 0, "per_lane": {}})
+    assert "pedestrians" not in r
+    assert "vision" not in r
+
+
+def test_vision_classifier_caching(tmp_path, monkeypatch):
+    import numpy as np
+    import flowsense.runner as runner
+    from unittest.mock import patch
+
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    vc = VisionClassifier(tmp_path / "crops", cooldown=30.0)
+    det = {"bbox": [10, 10, 40, 90], "track_id": 7}
+
+    with patch("flowsense.runner.cv2.imwrite", return_value=True) as mock_im, \
+         patch.object(runner, "crop_bbox", return_value=frame), \
+         patch("flowsense.ollama_vision.detect_accessibility_needs",
+               return_value={"aid_type": "wheelchair", "has_mobility_aid": True}) as mock_detect:
+        r1 = vc.classify(det, frame, now=1000.0)
+        r2 = vc.classify(det, frame, now=1005.0)
+    assert r1 == r2
+    assert mock_detect.call_count == 1
 
 
 def test_main_with_sinks(tmp_path, monkeypatch):

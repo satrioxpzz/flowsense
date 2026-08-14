@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from .lanes import lane_from_detection
 
 VEHICLE_CLASSES = {1: "bicycle", 2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
+PEDESTRIAN_CLASSES = {0: "pedestrian"}
 
 
 def load_model(model_path: str):
@@ -83,3 +84,34 @@ def track_summary(results, lanes, min_conf: float = 0.35) -> Tuple[List[dict], L
                 pairs.append((tid, lane))
             dets.append(det)
     return dets, pairs
+
+
+def pedestrian_detections(results, lanes, min_conf: float = 0.35) -> List[dict]:
+    """Extract pedestrian detections (COCO class 0) for the vision side.
+
+    Returns det dicts with bbox, cls, type="pedestrian", conf, lane and, when
+    tracking is active, track_id. Persons are excluded from the vehicle
+    counters in summarize_frame / track_summary.
+    """
+    dets = []
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls[0])
+            if cls not in PEDESTRIAN_CLASSES:
+                continue
+            conf = float(box.conf[0])
+            if conf < min_conf:
+                continue
+            bbox = [float(x) for x in box.xyxy[0]]
+            det = {
+                "bbox": bbox,
+                "cls": cls,
+                "type": PEDESTRIAN_CLASSES[cls],
+                "conf": conf,
+                "lane": lane_from_detection(bbox, lanes),
+            }
+            tid = int(box.id[0]) if box.id is not None else None
+            if tid is not None:
+                det["track_id"] = tid
+            dets.append(det)
+    return dets

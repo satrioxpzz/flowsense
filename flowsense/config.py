@@ -27,6 +27,7 @@ class Config:
     api_backoff: float = 2.0
     min_conf: float = 0.35
     interval: float = 2.0
+    vision_interval: float = 30.0
     model_path: str = "yolo11n.pt"
     db_url: str = ""
     s3_endpoint: str = ""
@@ -55,6 +56,7 @@ def load_config(env_path: Path = DEFAULT_ENV_PATH) -> Config:
         api_backoff=float(os.environ.get("FLOWSENSE_API_BACKOFF", defaults.api_backoff)),
         min_conf=float(os.environ.get("FLOWSENSE_MIN_CONF", defaults.min_conf)),
         interval=float(os.environ.get("FLOWSENSE_INTERVAL", defaults.interval)),
+        vision_interval=float(os.environ.get("FLOWSENSE_VISION_INTERVAL", defaults.vision_interval)),
         model_path=os.environ.get("FLOWSENSE_MODEL", defaults.model_path),
         db_url=os.environ.get("FLOWSENSE_DB_URL", defaults.db_url),
         s3_endpoint=os.environ.get("FLOWSENSE_S3_ENDPOINT", defaults.s3_endpoint),

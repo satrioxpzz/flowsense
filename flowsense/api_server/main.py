@@ -1,17 +1,14 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
 from .routes import router
 from ..database.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB
+    # Initialize DB (in production, use Alembic migrations instead)
+    # async with engine.begin() as conn:
+    #     await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 

@@ -1,16 +1,40 @@
-ultralytics==8.2.88
-opencv-python==4.10.0.84
-numpy==1.26.4
-requests==2.32.3
-boto3==1.34.109
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-sqlalchemy[asyncio]==2.0.30
-asyncpg==0.29.0
-alembic==1.13.1
-pydantic==2.7.4
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-geoalchemy2==0.14.2
-aiofiles==24.1.0
-psycopg[binary]==3.1.18
+# FlowSense Backend Dependencies - Complete for development and deployment
+ultralytics==8.2.88          # YOLOv11 inference engine
+opencv-python==4.10.0.84     # Computer vision libraries
+numpy==1.26.4                # Numerical operations (required by PyTorch)
+requests==2.32.3             # HTTP client for API calls and batch jobs
+
+# S3 & Storage SDKs  
+boto3==1.35.x                # AWS S3 / object storage SDK 
+aioboto3>=22.0               # Async version of boto3 (required)
+moto[sqs,ses]==5.0.x         # Local testing fixtures for S3 validation
+
+# FastAPI & Web Server
+fastapi==0.112.x             # ASGI API framework with OpenAPI auto-docs  
+uvicorn[standard]==0.32.x    # Production-ready async web server (websockets, h11)
+python-multipart>=0.0.6      # For handling multipart/form-data uploads in requests
+
+# Database & ORM - Async PostgreSQL support required! 
+sqlalchemy==2.0.x            # Core SQLAlchemy 2.0 for async support  
+asyncpg==0.30.x              # Async Postgres driver (NEW VERSION FOR PYTHON 3.13!)
+alembic==1.14.x              # Database migrations framework with version control
+
+# GeoSpatial DB Support - Essential! 
+geoalchemy2>=0.15            # GEOMETRY/GEOGRAPH for GIS coordinates in PostgreSQL
+psycopg[binary]==3.2.x       # Modern Postgres async driver (updated from 3.1)
+
+# Auth & Security Libraries  
+python-jose[cryptography]    # JWT token generation/validation if upgrading to OAuth later 
+passlib[bcrypt]>=1.7.4      # Password hashing with bcrypt support
+PyJWT>=2.8.0                # Modern JSON Web Token handling for auth headers
+
+
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+alembic
+pydantic
+python-jose[cryptography]
+passlib[bcrypt]
+geoalchemy2

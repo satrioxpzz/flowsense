@@ -14,7 +14,7 @@ from .api import fetch_cameras, find_camera
 from .config import load_config
 from .counter import TrackingCounter
 from .density import classify_density
-from .detector import load_model, summarize_frame, track_summary
+from .detector import load_model, summarize_frame, track_summary, pedestrian_detections
 from .lanes import load_rois
 from .sink import JsonlSink, PostgresSink, S3SnapshotSink
 from .stream import ReconnectingStream
@@ -35,6 +35,12 @@ def parse_args(argv=None):
     ap.add_argument("--snapshot", action="store_true", help="save snapshot frames to S3 sink")
     ap.add_argument("--track", action="store_true",
                     help="use YOLO tracking to count unique lane crossings")
+    ap.add_argument("--vision", action="store_true",
+                    help="occasionally classify pedestrian crops via local Qwen (ollama) "
+                         "for mobility-aid needs; requires Ollama running")
+    ap.add_argument("--vision-interval", type=float, default=None,
+                    help="seconds cooldown before re-classifying the same pedestrian "
+                         "(default: config FLOWSENSE_VISION_INTERVAL)")
     ap.add_argument("--snapshot-only", action="store_true",
                     help="detect on one frame then exit (used for calibration)")
     ap.add_argument("--show", action="store_true", help="display annotated frames")
@@ -46,7 +52,7 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def build_record(ts, camera, summary, crossings=None, density=None):
+def build_record(ts, camera, summary, crossings=None, density=None, pedestrians=None):
     record = {
         "ts": int(ts),
         "camera_id": camera["id"],
@@ -58,6 +64,17 @@ def build_record(ts, camera, summary, crossings=None, density=None):
         record["crossings"] = crossings
     if density is not None:
         record["density"] = density
+    if pedestrians is not None:
+        record["pedestrians"] = len(pedestrians)
+        record["vision"] = [
+            {
+                "track_id": p.get("track_id"),
+                "has_mobility_aid": (p.get("vision") or {}).get("has_mobility_aid"),
+                "aid_type": (p.get("vision") or {}).get("aid_type"),
+            }
+            for p in pedestrians
+            if p.get("vision")
+        ]
     return record
 
 
@@ -78,6 +95,60 @@ def annotate(frame, lanes, summary):
         cv2.putText(frame, f"{name}: {summary['per_lane'].get(name, 0)}",
                     (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
     return frame
+
+
+def crop_bbox(frame, bbox, pad: int = 10):
+    """Crop a YOLO xyxy bbox out of a frame with padding, clamped to bounds."""
+    h, w = frame.shape[:2]
+    x1, y1, x2, y2 = [int(v) for v in bbox]
+    x1 = max(0, x1 - pad)
+    y1 = max(0, y1 - pad)
+    x2 = min(w, x2 + pad)
+    y2 = min(h, y2 + pad)
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return frame[y1:y2, x1:x2]
+
+
+class VisionClassifier:
+    """Throttled wrapper around ollama_vision.detect_accessibility_needs.
+
+    Classifies each pedestrian crop at most once per cooldown window (per
+    track id, or per quantized bbox when tracking is off), reusing cached
+    results the rest of the time so Qwen's slow inference stays off the
+    real-time path.
+    """
+
+    def __init__(self, crops_dir, cooldown: float = 30.0):
+        self.crops_dir = Path(crops_dir)
+        self.crops_dir.mkdir(parents=True, exist_ok=True)
+        self.cooldown = cooldown
+        self._cache = {}
+
+    @staticmethod
+    def _key(det) -> str:
+        tid = det.get("track_id")
+        if tid is not None:
+            return f"t{tid}"
+        x1, y1, x2, y2 = [int(v // 10) for v in det["bbox"]]
+        return f"b{x1}_{y1}_{x2}_{y2}"
+
+    def classify(self, det, frame, now: float) -> dict:
+        key = self._key(det)
+        cached = self._cache.get(key)
+        if cached and now - cached[0] < self.cooldown:
+            return cached[1]
+        crop = crop_bbox(frame, det["bbox"])
+        if crop is None:
+            return {"has_mobility_aid": None, "aid_type": "unclear",
+                    "notes": "invalid bbox crop"}
+        fname = f"pedestrian_{key}_{int(now)}.jpg"
+        fpath = self.crops_dir / fname
+        cv2.imwrite(str(fpath), crop)
+        from .ollama_vision import detect_accessibility_needs
+        result = detect_accessibility_needs(str(fpath))
+        self._cache[key] = (now, result)
+        return result
 
 
 def main(argv=None) -> int:
@@ -110,6 +181,15 @@ def main(argv=None) -> int:
     if not args.skip_detect:
         model = load_model(cfg.model_path)
         log.info("model loaded", extra={"model": cfg.model_path})
+
+    vision = None
+    if args.vision:
+        if args.skip_detect:
+            log.warning("--vision requires the detection model; ignoring")
+        else:
+            vision_interval = args.vision_interval if args.vision_interval is not None else cfg.vision_interval
+            vision = VisionClassifier(cfg.data_dir / "crops", vision_interval)
+            log.info("vision enabled", extra={"cooldown_s": vision_interval, "model": "qwen3.5:9b-q4_K_M"})
 
     stream = ReconnectingStream(cam["url"])
     stream.open()
@@ -157,9 +237,16 @@ def main(argv=None) -> int:
                     results = model(frame, verbose=False)
                     summary = summarize_frame(results, lanes, cfg.min_conf)
 
+                if vision is not None:
+                    ped_dets = pedestrian_detections(results, lanes, cfg.min_conf)
+                    for d in ped_dets:
+                        d["vision"] = vision.classify(d, frame, now)
+                    summary["pedestrians"] = ped_dets
+
             if now - last_emit >= cfg.interval:
                 density = classify_density(summary.get("per_lane", {}))
-                record = build_record(now, cam, summary, crossings, density)
+                record = build_record(now, cam, summary, crossings, density,
+                                      pedestrians=summary.get("pedestrians"))
                 for sink in record_sinks:
                     try:
                         sink.emit(record)

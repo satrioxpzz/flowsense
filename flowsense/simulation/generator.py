@@ -277,9 +277,9 @@ def build_config():
     </gui_only>
 
     <output>
-        <summary-output value="../../output/summary.xml"/>
-        <tripinfo-output value="../../output/tripinfo.xml"/>
-        <queue-output value="../../output/queue.xml"/>
+        <summary-output value="../../../output/summary.xml"/>
+        <tripinfo-output value="../../../output/tripinfo.xml"/>
+        <queue-output value="../../../output/queue.xml"/>
     </output>
 
 </configuration>
