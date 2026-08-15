@@ -25,6 +25,13 @@ class Detection(Base):
     total_vehicles = Column(Integer, default=0)
     per_lane = Column(JSON)
     crossings = Column(JSON)
+    density = Column(JSON)
+    pedestrians = Column(Integer, default=0)
+    vision = Column(JSON)
+    speeds = Column(JSON)
+    lane_avg_speeds = Column(JSON)
+    anomalies = Column(JSON)
+    signal_recommendations = Column(JSON)
     camera = relationship("Camera", back_populates="detections")
 
 class Intersection(Base):

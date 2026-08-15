@@ -34,7 +34,10 @@ class ReconnectingStream:
             self._cap.release()
             self._cap = None
             time.sleep(self.backoff)
-            self.open()
+            try:
+                self.open()
+            except RuntimeError:
+                pass
 
     def release(self):
         if self._cap is not None:

@@ -23,7 +23,14 @@ class DetectionBase(BaseModel):
     timestamp: datetime
     total_vehicles: int
     per_lane: Dict[str, Any]
-    crossings: Dict[str, Any]
+    crossings: Optional[Dict[str, Any]] = None
+    density: Optional[Dict[str, Any]] = None
+    pedestrians: Optional[int] = 0
+    vision: Optional[List[Dict[str, Any]]] = None
+    speeds: Optional[Dict[str, Any]] = None
+    lane_avg_speeds: Optional[Dict[str, float]] = None
+    anomalies: Optional[List[Dict[str, Any]]] = None
+    signal_recommendations: Optional[List[Dict[str, Any]]] = None
 
 class DetectionCreate(DetectionBase):
     pass

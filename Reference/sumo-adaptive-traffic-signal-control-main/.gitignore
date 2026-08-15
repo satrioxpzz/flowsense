@@ -1,6 +1,0 @@
-output/
-__pycache__/
-*.py[cod]
-*.log
-net.net.xml
-routes.rou.xml

@@ -148,6 +148,8 @@ def main():
                 rois[camera_key][lane_names[current]] = points
                 points = []
                 current += 1
+            # Save original resolution
+            rois[camera_key]["_resolution"] = [w, h]
             break
 
         redraw()

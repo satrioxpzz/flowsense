@@ -12,7 +12,23 @@ def load_rois(rois_path, camera_key: str) -> dict:
     if not path.exists():
         return {}
     rois = json.loads(path.read_text(encoding="utf-8"))
-    return rois.get(camera_key, {})
+    cam_rois = rois.get(camera_key, {})
+    return cam_rois
+
+
+def scale_lanes(lanes: dict, original_size: tuple, current_size: tuple) -> dict:
+    if not original_size or original_size == current_size:
+        return lanes
+    orig_w, orig_h = original_size
+    curr_w, curr_h = current_size
+    scale_x = curr_w / orig_w
+    scale_y = curr_h / orig_h
+    scaled_lanes = {}
+    for name, poly in lanes.items():
+        if name == "_resolution":
+            continue
+        scaled_lanes[name] = [[int(x * scale_x), int(y * scale_y)] for x, y in poly]
+    return scaled_lanes
 
 
 def point_in_poly(pt, poly) -> bool:

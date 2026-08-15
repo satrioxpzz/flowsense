@@ -15,10 +15,13 @@ from .config import load_config
 from .counter import TrackingCounter
 from .density import classify_density
 from .detector import load_model, summarize_frame, track_summary, pedestrian_detections
-from .lanes import load_rois
+from .lanes import load_rois, scale_lanes
 from .sink import JsonlSink, PostgresSink, S3SnapshotSink
 from .stream import ReconnectingStream
 from .telemetry import setup_logging
+from .speed import SpeedEstimator
+from .anomaly import AnomalyDetector, Anomaly
+from .signal_optimizer import SignalOptimizer
 
 log = logging.getLogger("flowsense")
 
@@ -52,7 +55,7 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def build_record(ts, camera, summary, crossings=None, density=None, pedestrians=None):
+def build_record(ts, camera, summary, crossings=None, density=None, pedestrians=None, speeds=None, lane_avg_speeds=None, anomalies=None, signal_recommendations=None):
     record = {
         "ts": int(ts),
         "camera_id": camera["id"],
@@ -75,6 +78,14 @@ def build_record(ts, camera, summary, crossings=None, density=None, pedestrians=
             for p in pedestrians
             if p.get("vision")
         ]
+    if speeds is not None:
+        record["speeds"] = speeds
+    if lane_avg_speeds is not None:
+        record["lane_avg_speeds"] = lane_avg_speeds
+    if anomalies is not None:
+        record["anomalies"] = anomalies
+    if signal_recommendations is not None:
+        record["signal_recommendations"] = signal_recommendations
     return record
 
 
@@ -150,6 +161,33 @@ class VisionClassifier:
         self._cache[key] = (now, result)
         return result
 
+    def classify_vehicle(self, det, frame, now: float) -> dict:
+        key = self._key(det)
+        cached = self._cache.get(key)
+        if cached and now - cached[0] < self.cooldown:
+            return cached[1]
+        crop = crop_bbox(frame, det["bbox"])
+        if crop is None:
+            return {}
+        fname = f"vehicle_{key}_{int(now)}.jpg"
+        fpath = self.crops_dir / fname
+        cv2.imwrite(str(fpath), crop)
+        
+        from .ollama_vision import detect_helmet, detect_seatbelt, detect_phone_usage
+        
+        result = {}
+        vtype = det.get("class_name", "")
+        
+        if vtype == "motorcycle":
+            result.update(detect_helmet(str(fpath)))
+        elif vtype in ("car", "truck", "bus"):
+            result.update(detect_seatbelt(str(fpath)))
+            
+        result.update(detect_phone_usage(str(fpath)))
+            
+        self._cache[key] = (now, result)
+        return result
+
 
 def main(argv=None) -> int:
     args = parse_args(argv)
@@ -189,7 +227,11 @@ def main(argv=None) -> int:
         else:
             vision_interval = args.vision_interval if args.vision_interval is not None else cfg.vision_interval
             vision = VisionClassifier(cfg.data_dir / "crops", vision_interval)
-            log.info("vision enabled", extra={"cooldown_s": vision_interval, "model": "qwen3.5:9b-q4_K_M"})
+            log.info("vision enabled", extra={"cooldown_s": vision_interval, "model": "qwen3.5:9b"})
+
+    speed_est = SpeedEstimator() if args.track else None
+    anomaly_det = AnomalyDetector() if args.track else None
+    signal_opt = SignalOptimizer()
 
     stream = ReconnectingStream(cam["url"])
     stream.open()
@@ -223,7 +265,18 @@ def main(argv=None) -> int:
             now = time.time()
             summary = {}
             crossings = None
+            speeds = None
+            lane_avg_speeds = None
+            anomalies = None
+            sig_recs = None
+
             if model is not None:
+                if getattr(stream, '_lanes_scaled', False) is False:
+                    h, w = frame.shape[:2]
+                    calib_res = lanes.get("_resolution", (1920, 1080))
+                    lanes = scale_lanes(lanes, calib_res, (w, h))
+                    stream._lanes_scaled = True
+                    
                 if args.track:
                     results = model.track(frame, persist=True, verbose=False)
                     dets, pairs = track_summary(results, lanes, cfg.min_conf)
@@ -236,17 +289,66 @@ def main(argv=None) -> int:
                 else:
                     results = model(frame, verbose=False)
                     summary = summarize_frame(results, lanes, cfg.min_conf)
+                    dets = summary.get("vehicles", [])
 
                 if vision is not None:
                     ped_dets = pedestrian_detections(results, lanes, cfg.min_conf)
                     for d in ped_dets:
                         d["vision"] = vision.classify(d, frame, now)
                     summary["pedestrians"] = ped_dets
+                    
+                    for d in dets:
+                        d["vision"] = vision.classify_vehicle(d, frame, now)
+
+                if args.track and speed_est is not None:
+                    speeds = speed_est.update(dets, now)
+                    for d in dets:
+                        if d.get("track_id") in speeds:
+                            d["speed_kmh"] = speeds[d["track_id"]]
+                    lane_avg_speeds = speed_est.get_lane_avg_speed(dets, speeds)
+                    lane_queue_depths = speed_est.get_lane_queue_depth(dets, speeds)
+                    summary["lane_avg_speeds"] = lane_avg_speeds
+                    summary["lane_queue_depths"] = lane_queue_depths
+
+                if anomaly_det is not None:
+                    ped_dets_for_anomaly = summary.get("pedestrians") if vision else None
+                    anomalies_objs = anomaly_det.detect_all(dets if args.track else [], speeds if speeds else {}, ped_dets_for_anomaly, lanes, now)
+                    anomalies = []
+                    for a in anomalies_objs:
+                        a_dict = a if isinstance(a, dict) else a.__dict__
+                        anomalies.append(a_dict)
+                        if a_dict.get('severity') == 'critical':
+                            log.warning("critical anomaly detected", extra={"anomaly": a_dict})
+
+                if signal_opt is not None and lane_avg_speeds is not None:
+                    accessibility_lanes = []
+                    if "pedestrians" in summary:
+                        for p in summary["pedestrians"]:
+                            if p.get("vision", {}).get("has_mobility_aid") and p.get("lane"):
+                                accessibility_lanes.append(p["lane"])
+                                
+                    accident_lanes = []
+                    if anomalies:
+                        for a in anomalies:
+                            if a.get("type") == "accident" and a.get("lane"):
+                                accident_lanes.append(a["lane"])
+                                
+                    sig_recs = signal_opt.recommend(
+                        lane_avg_speeds, 
+                        lane_queue_depths, 
+                        summary.get("per_lane", {}), 
+                        accessibility_lanes, 
+                        accident_lanes
+                    )
 
             if now - last_emit >= cfg.interval:
                 density = classify_density(summary.get("per_lane", {}))
                 record = build_record(now, cam, summary, crossings, density,
-                                      pedestrians=summary.get("pedestrians"))
+                                      pedestrians=summary.get("pedestrians"),
+                                      speeds=speeds,
+                                      lane_avg_speeds=lane_avg_speeds,
+                                      anomalies=anomalies,
+                                      signal_recommendations=sig_recs)
                 for sink in record_sinks:
                     try:
                         sink.emit(record)
