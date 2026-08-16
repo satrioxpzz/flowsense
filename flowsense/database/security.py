@@ -27,15 +27,16 @@ API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 def _expected_api_key() -> str:
     """Return the configured inbound API key.
 
-    Falls back to a development default only when no real key is configured so
-    the stack can boot in local/dev mode. Production MUST set
-    FLOWSENSE_INBOUND_API_KEY.
+    Only ``FLOWSENSE_INBOUND_API_KEY`` is accepted. The upstream Pemkab
+    credential (``FLOWSENSE_API_KEY``) is intentionally NOT a fallback here:
+    a client granted write access to our API must never receive, or be able
+    to guess, the upstream key (P1-7 cross-trust-boundary leak).
+
+    When the variable is unset the function returns ``""`` and
+    ``require_api_key`` fails closed (HTTP 403) — writes are never silently
+    accepted.
     """
-    return (
-        os.getenv("FLOWSENSE_INBOUND_API_KEY")
-        or os.getenv("FLOWSENSE_API_KEY")  # backward-compat alias
-        or "secret-api-key-dev"
-    )
+    return os.getenv("FLOWSENSE_INBOUND_API_KEY", "")
 
 
 async def require_api_key(api_key: str = Depends(API_KEY_HEADER)) -> str:

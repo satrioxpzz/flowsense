@@ -1,12 +1,14 @@
 services:
   postgres:
     image: postgis/postgis:16-3.4
-    ports:
-      - "5432:5432"
+    # P0: do NOT publish the DB port to the host. The api reaches postgres
+    # over the internal `flowsense-network`; exposing 5432 on the host is an
+    # unnecessary attack surface. Inspect via `docker compose exec postgres psql`.
     environment:
-      POSTGRES_USER: flowsense
-      POSTGRES_PASSWORD: flowsense
-      POSTGRES_DB: flowsense
+      POSTGRES_USER: ${POSTGRES_USER:-flowsense}
+      # P0: no weak hardcoded default — require POSTGRES_PASSWORD from .env.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-flowsense}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -14,18 +16,17 @@ services:
     # P3-19: healthcheck so the api container waits for Postgres to accept
     # connections instead of racing at startup.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flowsense -d flowsense"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowsense} -d ${POSTGRES_DB:-flowsense}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   garage:
     image: dxflrs/garage:v1.1.0
-    ports:
-      - "3900:3900"
-      - "3901:3901"
-      - "3902:3902"
-      - "3903:3903"
+    # P0: garage ports are not published to the host; the api reaches garage
+    # by service name inside the network. (Note: this image is currently
+    # broken upstream — the /garage binary is missing — so the service will
+    # not stay up. Left here for when a working image is available.)
     volumes:
       - garage-data:/var/lib/garage
       - ./config/garage.toml:/etc/garage.toml
@@ -48,7 +49,7 @@ services:
     # .env) so it can reach the DB inside this network.
     environment:
       - GARAGE_ENDPOINT=http://garage:3900
-      - DATABASE_URL=postgresql+asyncpg://flowsense:flowsense@postgres:5432/flowsense
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowsense}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-flowsense}
     volumes:
       # P3-19: persist local data (jsonl, frames, sync queue) across restarts.
       - ./data:/app/data

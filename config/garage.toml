@@ -5,7 +5,10 @@ db_engine = "sqlite"
 replication_factor = 1
 
 # P1-14: Garage v1.x refuses to start without rpc_secret + rpc_bind_addr.
-rpc_secret = "5697693d9608526c688d077b3f7ba11e49739a3072c1334b1fad7cc3504fc261"
+# SECURITY: do NOT commit a real secret. Set the actual 64-char hex value via
+# the GARAGE_RPC_SECRET env var (see .env.example) and substitute it here, or
+# inject it at deploy time. This placeholder is intentionally non-functional.
+rpc_secret = "CHANGE_ME_SET_GARAGE_RPC_SECRET_IN_ENV"
 rpc_bind_addr = "[::]:3903"
 
 [s3_api]

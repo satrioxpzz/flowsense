@@ -97,3 +97,25 @@ No new shell-evaluation or SQL-string interpolation was found in the reviewed SU
 ## Residual hygiene / Sisa hygiene
 
 No actionable `TODO`/`FIXME` marker was found in the changed implementation. Remaining `pass` statements appear to be exception guards or abstract/scaffolding code. The stale config, unused local, uncalled `rotate_detections()` path, and `AUDIT.md` EOF whitespace should still be cleaned up.
+
+## Resolved (2026-08-17) / Sudah diperbaiki
+
+The P0 credential/secret findings above have been remediated and verified
+(ad-hoc check: 10/10 PASS; `pytest -q` 110 passed):
+
+- **Inbound auth fail-open** (`security.py`): removed the `secret-api-key-dev`
+  fallback AND the `FLOWSENSE_API_KEY` upstream alias. `_expected_api_key()` now
+  returns `""` when `FLOWSENSE_INBOUND_API_KEY` is unset, so `require_api_key`
+  fails **closed** (HTTP 403) instead of accepting writes with a known default.
+- **`.env.example`**: now documents `FLOWSENSE_INBOUND_API_KEY` (required) and
+  `POSTGRES_PASSWORD` (no weak default).
+- **`docker-compose.yml`**: postgres no longer publishes `5432` and garage no
+  longer publishes `3900-3903` to the host (internal network only). Postgres
+  creds are parameterized via `${POSTGRES_USER}`/`${POSTGRES_PASSWORD}`.
+- **`config/garage.toml`**: committed `rpc_secret` hex replaced with a
+  non-functional placeholder; real value lives in `GARAGE_RPC_SECRET` (`.env`).
+
+Deploy note: `.env` must now set `FLOWSENSE_INBOUND_API_KEY` and
+`POSTGRES_PASSWORD` (generate strong values) or the stack will refuse writes /
+fail to start postgres.
+
