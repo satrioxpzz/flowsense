@@ -119,6 +119,18 @@ Useful flags:
   (≥ a few seconds; emergency-vehicle spawns are skipped below ~120 s).
 - `--fast` — headless, faster step (skips slow GUI/trace output).
 - `--lefthand` — Indonesia drives on the left; the generator already sets this.
+- `--from-connector <path.jsonl>` — **drive SUMO demand from real YOLO detections**
+  instead of synthetic profiles. Reads a `data/connector_<id>.jsonl` produced by
+  the edge connector and converts per-lane counts (via `flowsense/simulation/adapter.py`)
+  into SUMO flow volumes. With crossings data (`connector.py --track`) it uses
+  crossing deltas; otherwise it falls back to per-lane occupancy (coarse).
+  Add `--bin-seconds N` to control the aggregation window (default 900 = 15 min).
+
+Example — run the simulation on real camera-30 traffic:
+
+```bash
+python -m flowsense.simulation --adaptive --from-connector data/connector_30.jsonl
+```
 
 Results are written to `output/` and summarized by the built-in analyzer
 (`output/summary/report_*.md` + `.json`).

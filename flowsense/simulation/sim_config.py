@@ -138,9 +138,20 @@ def set_traffic_volumes(congested_directions):
     # Convert from TOML nested lists to tuples if needed
     normal_vol = [tuple(v) for v in _DEFAULT_NORMAL_VOL]
     congested_vol = [tuple(v) for v in _DEFAULT_CONGESTED_VOL]
-    
+
     for direction in ["north", "south", "west", "east"]:
         if direction in congested_directions:
             TRAFFIC_VOLUME[direction] = congested_vol
         else:
             TRAFFIC_VOLUME[direction] = normal_vol
+
+
+def set_real_traffic_volumes(flows: dict):
+    """Use real FlowSense detection counts (from adapter.aggregate_flows) as the
+    SUMO demand instead of synthetic profiles.
+
+    Args:
+        flows: {direction: [(begin, end, vph), ...]} — same shape as TRAFFIC_VOLUME.
+    """
+    for direction in ["north", "south", "west", "east"]:
+        TRAFFIC_VOLUME[direction] = list(flows.get(direction, []))

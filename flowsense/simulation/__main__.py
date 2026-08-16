@@ -91,10 +91,10 @@ def _require_traci():
 # ----------------------------------------------------------------------------
 def run_once(use_adaptive: bool, congested: list[str], run_fast: bool = False,
              tls_layout: str = "opposites", orderliness: str = "orderly",
-             use_gui: bool = False) -> dict | None:
+             use_gui: bool = False, real_flows: dict | None = None) -> dict | None:
     import traci
     from .generator import build_network, build_routes, build_sensors, build_config, find_exe
-    from .sim_config import set_traffic_volumes
+    from .sim_config import set_traffic_volumes, set_real_traffic_volumes
     from .controller import TimeExtensionController, FixedTimeController
     from .analyzer import print_simulation_report
 
@@ -102,7 +102,12 @@ def run_once(use_adaptive: bool, congested: list[str], run_fast: bool = False,
     print(f"\n=== FlowSense SUMO Simulation: {mode_label} ===")
 
     # 1. Build infrastructure
-    set_traffic_volumes(congested)
+    if real_flows is not None:
+        # P3-wiring: real YOLO counts from connector jsonl drive SUMO demand.
+        set_real_traffic_volumes(real_flows)
+        print("  Demand source: REAL FlowSense detections (--from-connector)")
+    else:
+        set_traffic_volumes(congested)
     build_network(tls_layout)
     build_routes(orderliness)
     build_sensors()
@@ -171,6 +176,12 @@ def main(argv=None):
     parser.add_argument("--orderliness", default="orderly",
                         choices=["orderly", "chaotic"],
                         help="Driver behavior profile.")
+    parser.add_argument("--from-connector", metavar="JSONL", default=None,
+                        help="Use real FlowSense detections from this connector .jsonl "
+                             "as SUMO demand (overrides --congested synthetic volumes).")
+    parser.add_argument("--bin-seconds", type=int, default=900,
+                        help="Time-bin size (s) when aggregating --from-connector data "
+                             "(default 900 = 15 min).")
     args = parser.parse_args(argv)
 
     _require_traci()
@@ -179,6 +190,18 @@ def main(argv=None):
     if not (args.adaptive or args.fixed or args.compare):
         args.adaptive = True
 
+    # Load real detection demand if requested.
+    real_flows = None
+    if args.from_connector:
+        from . import adapter
+        recs = adapter.load_records(Path(args.from_connector))
+        if not recs:
+            print(f"  [WARN] No records loaded from {args.from_connector}; "
+                  f"simulation will use 0 real demand for all directions.",
+                  file=sys.stderr)
+        real_flows = adapter.aggregate_flows(recs, bin_seconds=args.bin_seconds)
+        print(f"  Loaded {len(recs)} real detection records from {args.from_connector}.")
+
     if args.duration is not None:
         from . import sim_config as _sc
         _sc.SIM_DURATION = args.duration
@@ -186,10 +209,10 @@ def main(argv=None):
     if args.compare:
         print("\n########## ADAPTIVE PASS ##########")
         adv = run_once(True, args.congested, args.fast, args.tls_layout,
-                       args.orderliness, args.gui)
+                       args.orderliness, args.gui, real_flows=real_flows)
         print("\n########## FIXED-TIME PASS ##########")
         fix = run_once(False, args.congested, args.fast, args.tls_layout,
-                       args.orderliness, args.gui)
+                       args.orderliness, args.gui, real_flows=real_flows)
         try:
             from .comparator import compute_comparison_deltas, write_comparison_report
             if adv and fix:
@@ -204,7 +227,7 @@ def main(argv=None):
 
     use_adaptive = bool(args.fixed) is False  # --fixed -> False
     run_once(use_adaptive, args.congested, args.fast, args.tls_layout,
-             args.orderliness, args.gui)
+             args.orderliness, args.gui, real_flows=real_flows)
 
 
 if __name__ == "__main__":

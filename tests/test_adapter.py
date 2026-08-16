@@ -92,3 +92,19 @@ def test_aggregate_flows_minimum_vph():
     assert flows["north"][0][2] == 0
     assert flows["west"][0][2] == 0
     assert flows["east"][0][2] == 0
+
+
+def test_set_real_traffic_volumes_populates_config():
+    """Wiring test: adapter output must plug directly into SUMO demand."""
+    from flowsense.simulation import sim_config
+
+    flows = {
+        "south": [(0, 900, 80)],
+        "north": [(0, 900, 48)],
+        # west/east omitted → must stay empty, not crash
+    }
+    sim_config.set_real_traffic_volumes(flows)
+    assert sim_config.TRAFFIC_VOLUME["south"] == [(0, 900, 80)]
+    assert sim_config.TRAFFIC_VOLUME["north"] == [(0, 900, 48)]
+    assert sim_config.TRAFFIC_VOLUME["west"] == []
+    assert sim_config.TRAFFIC_VOLUME["east"] == []
