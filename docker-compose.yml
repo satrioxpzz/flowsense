@@ -44,8 +44,11 @@ services:
     env_file:
       - .env
     # P1-14: inside the compose network the garage service is reachable by name.
+    # The api must use the service-name host `postgres` (not a host IP from
+    # .env) so it can reach the DB inside this network.
     environment:
       - GARAGE_ENDPOINT=http://garage:3900
+      - DATABASE_URL=postgresql+asyncpg://flowsense:flowsense@postgres:5432/flowsense
     volumes:
       # P3-19: persist local data (jsonl, frames, sync queue) across restarts.
       - ./data:/app/data

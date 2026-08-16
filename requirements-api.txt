@@ -1,6 +1,27 @@
-# FlowSense — FastAPI backend dependencies.
-# Deliberately EXCLUDES torch / ultralytics / opencv: the API server only
-# serves the database and never runs inference, so it must not pull the
-# ~2 GB ML stack (P0-4 / P3 audit item).
+# FlowSense — FastAPI backend dependencies (self-contained).
+# Does NOT use `-r requirements.txt`: the API server only serves the database
+# and never runs inference or S3 sync, so it must not pull the ~2 GB ML stack
+# (torch / ultralytics / opencv) or the GarageHQ stack (boto3 / aioboto3).
+# Listed explicitly to keep the API image lean (P0-4).
+# Note: the API connects via asyncpg (postgresql+asyncpg), so psycopg is NOT
+# required here.
 
--r requirements.txt
+# Web framework
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+python-multipart==0.0.20
+
+# Database & ORM (async PostgreSQL via asyncpg)
+sqlalchemy==2.0.51
+asyncpg==0.31.0
+alembic==1.14.0
+geoalchemy2==0.20.0
+
+# Auth & security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+PyJWT==2.8.0
+
+# Config / HTTP
+python-dotenv==1.2.2
+httpx==0.28.1
