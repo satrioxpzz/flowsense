@@ -34,7 +34,10 @@ Tidak ada satu pun jalur data yang tersambung ujung-ke-ujung. Edge menulis `.jso
 
 ## P0 — Blocker: komponen tidak bisa dijalankan sama sekali
 
-### - [ ] P0-1. Backend FastAPI gagal diimpor — `SyntaxError`
+### - [x] P0-1. Backend FastAPI gagal diimpor — `SyntaxError`
+
+> **STATUS (2026-08-16, commit `76c2413`): SUDAH BERES — sudah diperbaiki oleh commit pasca-audit.**
+> Verifikasi: `python -c "from flowsense.api_server.main import app"` berhasil; `app.openapi()` menyajikan **11 endpoint** di bawah `/api/v1/` (detections, cameras, intersections, alerts, analytics, health). Parameter `db` sudah diposisikan dengan `= Depends(get_db)` (lihat `routes/detections.py:23,39,49,65`). Tidak ada `SyntaxError`. Tidak ada perubahan kode diperlukan untuk item ini.
 
 **Lokasi:** `flowsense/api_server/routes/detections.py:24`
 
@@ -50,7 +53,15 @@ SyntaxError: parameter without a default follows parameter with a default
 
 ---
 
-### - [ ] P0-2. Skema database tidak pernah dibuat di mana pun
+### - [x] P0-2. Skema database tidak pernah dibuat di mana pun
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.**
+> Akar masalah: `migrations/versions/initial.py` hanya `pass` (stub), sehingga `add_density_field.py` menjalankan `ALTER TABLE detections ADD COLUMN density` padahal tabel `detections` belum pernah dibuat → `UndefinedTableError` pada setiap endpoint.
+> Perbaikan:
+> - `initial.py` ditulis ulang agar membuat **seluruh tabel** (`cameras`, `detections`, `intersections`, `traffic_signals`, `users`, `alerts`) langsung dari `Base.metadata` (models), termasuk kolom `density`.
+> - `add_density_field.py` dijadikan idempoten (cek kolom ada sebelum `ADD`/`DROP`).
+> - `flowsense/api_server/main.py` `lifespan` sekarang memanggil `Base.metadata.create_all` sebagai safety-net pertama boot (tidak menggantikan Alembic di produksi).
+> Verifikasi end-to-end: `alembic upgrade head` di Postgres+PostGIS membuat 6 tabel + `spatial_ref_sys`; `detections` memiliki 13 kolom (termasuk `density`); INSERT+SELECT langsung ke DB berhasil (repro dari `UndefinedTableError` hilang).
 
 **Lokasi:** `migrations/versions/initial.py:20`, `flowsense/api_server/main.py:14`
 
@@ -62,7 +73,13 @@ Migrasi awal sengaja `pass`, dengan komentar *"Run `alembic revision --autogener
 
 ---
 
-### - [ ] P0-3. Simulasi SUMO tidak punya entry point
+### - [x] P0-3. Simulasi SUMO tidak punya entry point
+
+> **STATUS (2026-08-16, commit `3bf1117`): SUDAH BERES — ditambahkan pasca-audit.**
+> Verifikasi: `flowsense/simulation/__main__.py` ada dengan `traci.start()` (baris 118) + `def main()` (baris 147). `python -m flowsense.simulation --help` menyajikan CLI penuh (`--adaptive/--fixed/--compare`, `--duration`, `--gui`, dll). Tidak ada perubahan kode diperlukan untuk item ini.
+
+> **STATUS LANJUTAN (2026-08-16): SIMULASI SEKARANG BENAR-BENAR BERJALAN END-TO-END.**
+> Setelah perbaikan aset scenario (lihat P1-10), eksekusi riil `python -m flowsense.simulation --adaptive --fast --duration 60` sukses: SUMO+TraCI memproses **1.071 kendaraan** (hingga 49 bersamaan), controller adaptif stepping, selesai bersih (`Simulation finished in 63.9s wall-clock`, exit 0), dan `analyzer` menghasilkan laporan terstruktur dari `output/tripinfo.xml` (`global` + `by_vehicle_type` KPIs). Sebelumnya gagal dengan `Negative departure time in vehicle 'v0'` karena aset `routes.rou.xml` rusak (diport dari versi lama) — sekarang `build_routes()` meng-klip `depart` ke ≥0 saat regenerasi.
 
 **Lokasi:** `flowsense/simulation/` (tidak ada file yang hilang tersebut)
 
@@ -74,7 +91,16 @@ Tidak ada satu pun kode yang memanggil `traci.start()` atau merangkai `generator
 
 ---
 
-### - [ ] P0-4. `requirements.txt` tidak lengkap → `ImportError` saat runtime
+### - [x] P0-4. `requirements.txt` tidak lengkap → `ImportError` saat runtime
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI.**
+> Paket yang hilang (`python-dotenv`, `httpx`, `torch`, `traci`/`sumolib`, `boto3`/`botocore`, `requests`, `alembic`, `cv2`) kini **terinstal di venv** dan di-**pin** dengan versi PEP 440 valid.
+> Perubahan file:
+> - `requirements.txt` — dibersihkan dari duplikat, semua versi dipin.
+> - `requirements-edge.txt` — runtime deteksi tepi (torch + ultralytics + opencv + numpy).
+> - `requirements-api.txt` — **tanpa** torch/ultralytics/opencv (API server tak perlu ML ~2 GB).
+> - `requirements-dev.txt` — ganti `requirements-dev-test.txt` yang lama (pin tidak valid seperti `pytest==8.3.x`, `black>=24.x`); sekarang semua pin valid.
+> Verifikasi: keempat file lolos validasi PEP 440; paket yang sebelumnya `MISSING` kini `OK` saat diimpor.
 
 **Lokasi:** `requirements.txt`
 
@@ -94,7 +120,12 @@ Selain itu **tidak ada satu pun versi yang dipin** — build tidak reprodusibel.
 
 ---
 
-### - [ ] P0-5. Test suite tidak bisa dijalankan
+### - [x] P0-5. Test suite tidak bisa dijalankan
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.**
+> Akar masalah: 7/12 modul test gagal dikoleksi karena `cv2`, `boto3`/`botocore`, `requests`, `traci`/`sumolib`, `alembic` tidak terinstal di venv (meski tercantum di requirements).
+> Perbaikan: paket-paket tersebut diinstal; `requirements-dev.txt` baru memuat pin valid untuk pytest/pytest-asyncio/respx/faker/dll.
+> Verifikasi: `pytest --co` mengoleksi **89 test** (sebelumnya 7 error); `pytest -q` → **89 passed**.
 
 **Lokasi:** lingkungan `venv/`
 
@@ -215,11 +246,13 @@ Di repo referensi `BUILD_DIR = "map/build"`, sehingga `../../output` di `config.
 
 ---
 
-### - [ ] P1-10. `file="NUL"` di definisi sensor
+### - [x] P1-10. `file="NUL"` di definisi sensor
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.**
+> Catatan penting: versi Eclipse SUMO di environment ini (1.27.1) **mewajibkan** atribut `file` pada `laneAreaDetector` — menghapusnya mentah-mentah (saran audit) malah memicu error `Attribute 'file' is missing`. Perbaikan: `file` diarahkan ke path valid relatif terhadap config (`detectors/cam_*.xml`, ditulis ke `simulation/map/build/detectors/`), bukan perangkat `NUL`. `os.makedirs(BUILD_DIR/detectors)` menjamin direktori ada sebelum SUMO menulis.
+> Verifikasi: simulasi berjalan penuh (lihat P0-3) tanpa error sensor; `grep -c 'file="NUL"' sensors.add.xml` → 0. (Catatan: saran asli audit — "hapus atribut file" — tidak berlaku untuk versi SUMO ini; "gunakan os.devnull" juga salah karena SUMO butuh file sungguhan, bukan devnull.)
 
 **Lokasi:** `flowsense/simulation/generator.py:220-236`
-
-Delapan detektor E2 memakai perangkat null Windows. Di Linux ini membuat berkas sampah bernama literal `NUL`. Diwarisi dari referensi Windows-only tanpa penyesuaian.
 
 **Perbaikan:** gunakan `os.devnull`, atau hilangkan atribut `file` (SUMO tidak mewajibkannya untuk `laneAreaDetector`).
 
@@ -529,3 +562,15 @@ Mengembalikan `{"status": "analytics_endpoint_stub"}`. Modul ini juga mengimpor 
 ---
 
 *Dokumen ini adalah snapshot pada commit `a71f7f2`. Perbarui status checkbox seiring temuan diperbaiki.*
+
+---
+
+## Catatan Re-verifikasi (2026-08-16, HEAD `76c2413`)
+
+Pada tanggal di atas, seluruh **P0 (5/5)** diverifikasi ulang terhadap working tree saat ini — bukan sekadar mencentang kotak.
+
+- **P0-1 & P0-3**: sudah terbukti beres oleh commit pasca-audit (`76c2413`, `3bf1117`). Tidak ada perubahan kode diperlukan.
+- **P0-2, P0-4, P0-5**: diperbaiki dan **terverifikasi secara end-to-end** (migrasi Alembic di Postgres+PostGIS, 4 file requirements lolos validasi PEP 440, 89 test `pytest` lulus).
+
+Item **P1–P3 (57 kotak) masih terbuka** — belum dikerjakan pada sesi ini (di luar cakupan penyelesaian P0).
+

@@ -1,0 +1,16 @@
+# FlowSense — edge detection runtime dependencies.
+# Pulls in the heavy ML stack (torch + ultralytics + opencv) used by the
+# on-device inference pipeline. NOT needed by the API server.
+#
+# torch / torchvision require the CUDA 12.8 wheel index:
+#   pip install -r requirements-edge.txt \
+#     --extra-index-url https://download.pytorch.org/whl/cu128
+
+-r requirements.txt
+
+# Computer vision + ML inference
+numpy==2.4.4
+opencv-python==4.10.0.84
+ultralytics==8.2.88
+torch==2.11.0+cu128
+torchvision==0.26.0+cu128

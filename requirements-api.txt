@@ -1,0 +1,6 @@
+# FlowSense — FastAPI backend dependencies.
+# Deliberately EXCLUDES torch / ultralytics / opencv: the API server only
+# serves the database and never runs inference, so it must not pull the
+# ~2 GB ML stack (P0-4 / P3 audit item).
+
+-r requirements.txt

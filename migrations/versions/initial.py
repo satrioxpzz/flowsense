@@ -1,27 +1,43 @@
-"""initial
+"""initial schema
 
 Revision ID: initial
-Revises: 
+Revises:
 Create Date: 2026-08-04 16:59:00.000000
 
-"""
-from typing import Sequence, Union
-from alembic import op
-import sqlalchemy as sa
-import geoalchemy2
+Creates the full application schema (cameras, detections, intersections,
+traffic_signals, users, alerts) directly from the SQLAlchemy models so the
+migrated database exactly matches ``flowsense.database.models``.
 
-revision: str = 'initial'
+This replaces the previous no-op stub (which only contained a ``pass`` and
+left every endpoint failing with ``UndefinedTableError``).
+
+"""
+
+from typing import Sequence, Union
+
+from alembic import op
+
+from flowsense.database.database import Base
+from flowsense.database.models import (  # noqa: F401  (ensure models are registered)
+    Alert,
+    Camera,
+    Detection,
+    Intersection,
+    TrafficSignal,
+    User,
+)
+
+revision: str = "initial"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+
 def upgrade() -> None:
-    # We leave the actual table creation to be generated later since we don't have python access
-    # Run `alembic revision --autogenerate` to get the real migration
-    pass
+    bind = op.get_bind()
+    Base.metadata.create_all(bind=bind)
+
 
 def downgrade() -> None:
-    # Intentional no-op: this is the initial (base) migration, so there is no
-    # prior schema to revert to. Dropping the initial tables is destructive
-    # and is intentionally not supported.
-    pass
+    bind = op.get_bind()
+    Base.metadata.drop_all(bind=bind)

@@ -171,6 +171,7 @@ def build_routes(orderliness="orderly"):
 
             for _ in range(n_veh):
                 depart   = round(random.uniform(t_start, t_end - 1), 2)
+                depart   = max(0.0, depart)  # SUMO rejects negative depart times
                 move     = random.choices(move_choices, weights=move_weights)[0]
                 vtype_id = random.choices(
                     [v[0] for v in VEHICLE_TYPES],
@@ -219,23 +220,24 @@ def build_sensors():
     content = """<?xml version="1.0" encoding="UTF-8"?>
 <additional>
     <!-- North Sensors -->
-    <laneAreaDetector id="cam_N_0" lane="north_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
-    <laneAreaDetector id="cam_N_1" lane="north_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_N_0" lane="north_in_2_0" pos="0" endPos="-1" freq="1" file="detectors/cam_N_0.xml"/>
+    <laneAreaDetector id="cam_N_1" lane="north_in_2_1" pos="0" endPos="-1" freq="1" file="detectors/cam_N_1.xml"/>
     
     <!-- South Sensors -->
-    <laneAreaDetector id="cam_S_0" lane="south_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
-    <laneAreaDetector id="cam_S_1" lane="south_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_S_0" lane="south_in_2_0" pos="0" endPos="-1" freq="1" file="detectors/cam_S_0.xml"/>
+    <laneAreaDetector id="cam_S_1" lane="south_in_2_1" pos="0" endPos="-1" freq="1" file="detectors/cam_S_1.xml"/>
     
     <!-- West Sensors -->
-    <laneAreaDetector id="cam_W_0" lane="west_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
-    <laneAreaDetector id="cam_W_1" lane="west_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_W_0" lane="west_in_2_0" pos="0" endPos="-1" freq="1" file="detectors/cam_W_0.xml"/>
+    <laneAreaDetector id="cam_W_1" lane="west_in_2_1" pos="0" endPos="-1" freq="1" file="detectors/cam_W_1.xml"/>
     
     <!-- East Sensors -->
-    <laneAreaDetector id="cam_E_0" lane="east_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
-    <laneAreaDetector id="cam_E_1" lane="east_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_E_0" lane="east_in_2_0" pos="0" endPos="-1" freq="1" file="detectors/cam_E_0.xml"/>
+    <laneAreaDetector id="cam_E_1" lane="east_in_2_1" pos="0" endPos="-1" freq="1" file="detectors/cam_E_1.xml"/>
 </additional>
 """
     sensor_path = os.path.join(BUILD_DIR, "sensors.add.xml")
+    os.makedirs(os.path.join(BUILD_DIR, "detectors"), exist_ok=True)  # SUMO writes detector output here
     with open(sensor_path, "w", encoding="utf-8") as f:
         f.write(content)
     ok("sensors.add.xml successfully generated")

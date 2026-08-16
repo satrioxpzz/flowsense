@@ -6,9 +6,11 @@ from ..database.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize DB (in production, use Alembic migrations instead)
-    # async with engine.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all)
+    # Alembic is the source of truth for schema in production. As a safety
+    # net (dev / first boot) we ensure the tables exist so the API never
+    # fails with UndefinedTableError when started without running migrations.
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 
