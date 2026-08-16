@@ -1,50 +1,19 @@
 {
+  "_calibration_note": "P1-1: ROI polygons must be calibrated against the ACTUAL stream resolution. Record that resolution here under each camera as '_resolution': [width, height] (the size of the frame used to draw the polygons, e.g. frame_test.jpg). At runtime runner.py scales the polygons from _resolution to the live stream size. The polygon coordinates below were drawn on a small frame (~480x360); set _resolution to match the calibration frame or the polygons will land off-target. Re-run: python calibrate.py --camera-id 30",
   "30": {
+    "_resolution": [480, 360],
     "kota": [
-      [
-        387,
-        207
-      ],
-      [
-        381,
-        223
-      ],
-      [
-        378,
-        232
-      ],
-      [
-        378,
-        250
-      ],
-      [
-        384,
-        268
-      ],
-      [
-        399,
-        322
-      ],
-      [
-        443,
-        330
-      ],
-      [
-        454,
-        315
-      ],
-      [
-        439,
-        229
-      ],
-      [
-        423,
-        209
-      ],
-      [
-        389,
-        204
-      ]
+      [387, 207],
+      [381, 223],
+      [378, 232],
+      [378, 250],
+      [384, 268],
+      [399, 322],
+      [443, 330],
+      [454, 315],
+      [439, 229],
+      [423, 209],
+      [389, 204]
     ],
     "ploso": [],
     "demak": [],

@@ -22,9 +22,14 @@ class ReconnectingStream:
 
     def read(self):
         if self._cap is None:
-            self.open()
+            try:
+                self.open()
+            except RuntimeError:
+                pass
         attempt = 0
         while True:
+            if self._cap is None:
+                return False, None
             ok, frame = self._cap.read()
             if ok and frame is not None:
                 return True, frame

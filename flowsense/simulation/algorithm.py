@@ -65,34 +65,37 @@ class TimeExtensionAlgorithm:
         ratio = min(queue_count / self.max_queue_capacity, 1.0)
         return self.min_green + ratio * (self.max_green - self.min_green)
 
-    def decide_yellow_transition(self, step_length: float, vehicles_detected: int,
+    def decide_yellow_transition(self, step_length: float, vehicles_detected: int | None,
                                   is_healthy: bool, queue_count: int = 0) -> tuple[bool, str]:
         """
         Determines whether the active green phase should transition to yellow
         based on Gap-out (empty gap detected) and Max-out (dynamic maximum limit reached).
-        
+
         Args:
             step_length: Simulation step length in seconds.
-            vehicles_detected: Number of vehicles currently detected by sensors.
+            vehicles_detected: Number of vehicles currently detected by sensors,
+                or None when the sensor reading is unavailable (P1-12). None is
+                treated as "unknown" — it never triggers a gap-out.
             is_healthy: Whether the camera sensors for this direction are healthy.
             queue_count: Current queue length for dynamic max_green calculation.
-            
+
         Returns:
             Tuple of (should_transition_to_yellow, reason_string).
         """
         self.elapsed_green += step_length
-        
+
         # Calculate dynamic max green based on current queue length
         effective_max_green = self.calculate_dynamic_max_green(queue_count)
-        
+
         if self.elapsed_green >= self.min_green:
-            # GAP-OUT: If active camera is healthy and no vehicles are detected
+            # GAP-OUT: only when the sensor is healthy, a real reading of zero
+            # vehicles is present, and no sensor is down for this direction.
             if vehicles_detected == 0 and is_healthy:
                 return True, f"GAP-OUT (Empty gap detected after {self.elapsed_green:.1f}s)"
-            # MAX-OUT: If green duration reaches the dynamic maximum limit
+            # MAX-OUT: green reached the dynamic maximum limit.
             elif self.elapsed_green >= effective_max_green:
                 return True, f"MAX-OUT (Dynamic green limit of {effective_max_green:.0f}s reached, queue={queue_count})"
-                
+
         return False, "KEEP"
 
     def update_starvation_trackers(self, step_length: float, is_dual_mode: bool, direction_phases: dict):

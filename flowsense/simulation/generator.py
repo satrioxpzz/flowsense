@@ -188,10 +188,17 @@ def build_routes(orderliness="orderly"):
         for direction in directions:
             for interval_start in range(0, SIM_DURATION, 900):  # Every 15-minute window
                 if random.random() < EVP_SPAWN_PROB * 15:  # Scale probability to 15-min window
-                    depart = round(random.uniform(
-                        max(interval_start, 60),  # Don't spawn in first 60s
-                        min(interval_start + 900, SIM_DURATION - 60)
-                    ), 2)
+                    # Guard: only spawn when the simulation is long enough for a
+                    # valid depart window. depart must satisfy
+                    #   lo = max(interval_start, 60)  and  hi = min(interval_start + 900, SIM_DURATION - 60)
+                    # If SIM_DURATION < 120, hi < lo and uniform(lo, hi) yields
+                    # negative departures that SUMO rejects (P1 regression when
+                    # --duration is small). Skip emergency spawns in that case.
+                    lo = max(interval_start, 60)
+                    hi = min(interval_start + 900, SIM_DURATION - 60)
+                    if hi < lo:
+                        continue
+                    depart = round(random.uniform(lo, hi), 2)
                     move = "straight"  # Emergency vehicles go straight through
                     evtype = random.choices(
                         [v[0] for v in EMERGENCY_VEHICLE_TYPES],

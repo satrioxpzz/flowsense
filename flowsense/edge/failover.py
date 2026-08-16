@@ -40,7 +40,7 @@ class EdgeFailoverManager:
         """Check connection to the central API server."""
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(f"{self.api_url}/health", timeout=2.0)
+                response = await client.get(f"{self.api_url}/api/v1/health/", timeout=2.0)
                 response.raise_for_status()
             
             if not self.is_connected:
@@ -66,7 +66,7 @@ class EdgeFailoverManager:
         if self.is_connected:
             try:
                 async with httpx.AsyncClient() as client:
-                    await client.post(f"{self.api_url}/api/v1/records", json=data)
+                    await client.post(f"{self.api_url}/api/v1/detections", json=data)
             except Exception:
                 await self._queue_local(data)
         else:
@@ -90,7 +90,8 @@ class EdgeFailoverManager:
         
         try:
              async with httpx.AsyncClient() as client:
-                await client.post(f"{self.api_url}/api/v1/records/batch", json=to_send)
+                for record in to_send:
+                    await client.post(f"{self.api_url}/api/v1/detections", json=record)
              logger.info("Flush successful.")
              file_path = self.sync_dir / "edge_data.jsonl"
              if file_path.exists():

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
@@ -13,15 +13,15 @@ class Camera(Base):
     location_lng = Column(Float)
     location = Column(Geometry('POINT'))
     status = Column(String, default="offline")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
     detections = relationship("Detection", back_populates="camera")
 
 class Detection(Base):
     __tablename__ = "detections"
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(Integer, ForeignKey("cameras.id"))
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime(timezone=True), default=datetime.now(timezone.utc), index=True)
     total_vehicles = Column(Integer, default=0)
     per_lane = Column(JSON)
     crossings = Column(JSON)
@@ -52,7 +52,7 @@ class TrafficSignal(Base):
     phase = Column(String)
     state = Column(String)
     duration = Column(Integer)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
     intersection = relationship("Intersection", back_populates="signals")
 
 class User(Base):
@@ -62,7 +62,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
     role = Column(String, default="user")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
 
 class Alert(Base):
     __tablename__ = "alerts"
@@ -72,5 +72,5 @@ class Alert(Base):
     message = Column(String)
     intersection_id = Column(Integer, ForeignKey("intersections.id"))
     acknowledged = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
     intersection = relationship("Intersection", back_populates="alerts")

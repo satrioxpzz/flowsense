@@ -1,0 +1,35 @@
+# Secrets / environment — never bake into the image
+.env
+.env.example
+*.env
+
+# Data, logs, model weights
+data/
+logs/
+*.pt
+*.onnx
+*.weights
+
+# Virtual environments and large/unnecessary trees
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Reference repo (not part of the deployable app)
+Reference/
+
+# Local simulation outputs
+output/
+simulation/map/build/detectors/
+
+# Git & CI
+.git/
+.github/
+
+# Editor/OS cruft
+.vscode/
+.idea/
+.DS_Store

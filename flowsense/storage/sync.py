@@ -36,10 +36,15 @@ class FlowSenseSyncManager:
             self.client.upload_file(self.model_path, remote_key)
 
     def sync_configs(self):
-        """Sync only config files."""
+        """Sync only NON-SECRET config files.
+
+        Security: never upload .env or any file that may contain credentials.
+        Only ship calibration / scenario configs that are safe to persist in
+        object storage (rois.json, simulation_config.toml, etc.).
+        """
         logger.info("Syncing configs...")
         self.client.ensure_bucket()
-        config_files = [".env", "config.json", "config.yaml"]
+        config_files = ["rois.json", "simulation_config.toml", "config.json", "config.yaml"]
         for config in config_files:
             config_path = os.path.join(self.config_dir, config)
             if os.path.exists(config_path):

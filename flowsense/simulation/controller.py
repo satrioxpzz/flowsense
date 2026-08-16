@@ -110,6 +110,13 @@ class TimeExtensionController:
             self._build_evp_direction_map()
             log.info("Emergency Vehicle Preemption (EVP): ENABLED")
 
+        # Health recovery (P1-12): a momentary sensor error sets
+        # cams_healthy[dir]=False, but it must not permanently degrade a
+        # direction. We count consecutive *successful* reads while down and
+        # restore health after a few clean samples.
+        self._health_down_steps = {d: 0 for d in ["N", "S", "E", "W"]}
+        self._health_recovery_threshold = 5
+
         self.logger = None
         if _log_enabled:
             try:
@@ -164,6 +171,11 @@ class TimeExtensionController:
     def step(self, step_length=0.1):
         """Executed at every 0.1s step in main execution loop."""
         traci = self._traci
+
+        # Health recovery (P1-12): if a direction was marked unhealthy, probe it
+        # each tick. After several consecutive clean reads, restore its health so
+        # a transient glitch does not permanently degrade the direction.
+        self._attempt_health_recovery()
 
         self.update_gui_pois()
         self.algorithm.update_starvation_trackers(step_length, self.is_dual_mode, self.direction_phases)
@@ -253,11 +265,17 @@ class TimeExtensionController:
         if self.is_dual_mode:
             counter_detected = self.get_active_vehicles(self.counterpart[self.algorithm.current_direction])
             counter_queue = self.get_queue_count(self.counterpart[self.algorithm.current_direction])
-            if vehicles_detected == 999 or counter_detected == 999:
-                vehicles_detected = 999
-            else:
-                vehicles_detected += counter_detected
-            queue_count += counter_queue
+            # Combine only known (non-None) readings. If a sensor is down we keep
+            # the other direction's value instead of poisoning the sum with a
+            # sentinel (P1-12).
+            if vehicles_detected is not None and counter_detected is not None:
+                vehicles_detected = vehicles_detected + counter_detected
+            elif counter_detected is not None:
+                vehicles_detected = counter_detected
+            if queue_count is not None and counter_queue is not None:
+                queue_count = queue_count + counter_queue
+            elif counter_queue is not None:
+                queue_count = counter_queue
 
         is_healthy = self.cams_healthy[self.algorithm.current_direction]
         if self.is_dual_mode:
@@ -280,10 +298,15 @@ class TimeExtensionController:
                 self.logger.record_event(reason)
 
     def get_active_vehicles(self, direction):
-        """Reads active vehicle count from lane area detectors with failsafe check."""
+        """Reads active vehicle count from lane area detectors.
+
+        Returns None (not a sentinel number) when the sensor is unhealthy or
+        errors, so the value can never leak into arithmetic as if it were a real
+        vehicle count (P1-12). Callers must treat None as "unknown".
+        """
         traci = self._traci
         if not self.cams_healthy[direction]:
-            return 999
+            return None
 
         try:
             active_cams = self.cams[direction]
@@ -291,13 +314,16 @@ class TimeExtensionController:
         except Exception:
             log.error("FAILSAFE: Camera for direction '%s' detected ERROR! Activating fixed-time fallback.", direction)
             self.cams_healthy[direction] = False
-            return 999
+            return None
 
     def get_queue_count(self, direction):
-        """Reads total queued vehicle length from lane area detectors with failsafe check."""
+        """Reads total queued vehicle length from lane area detectors.
+
+        Returns None when the sensor is unhealthy or errors (P1-12).
+        """
         traci = self._traci
         if not self.cams_healthy[direction]:
-            return 999
+            return None
 
         try:
             candidate_cams = self.cams[direction]
@@ -305,7 +331,36 @@ class TimeExtensionController:
         except Exception:
             log.error("FAILSAFE: Camera for direction '%s' detected ERROR! Activating fixed-time fallback.", direction)
             self.cams_healthy[direction] = False
-            return 999
+            return None
+
+    def _attempt_health_recovery(self):
+        """Restore sensor health after a transient failure (P1-12).
+
+        A direction flagged unhealthy is probed each tick. If it returns a clean
+        reading a few times in a row, its health is restored -- so a momentary
+        glitch does not permanently degrade that direction (the original bug
+        where cams_healthy[dir]=False was never reverted).
+        """
+        traci = self._traci
+        for direction in ["N", "S", "E", "W"]:
+            if self.cams_healthy[direction]:
+                self._health_down_steps[direction] = 0
+                continue
+            try:
+                ok = all(
+                    traci.lanearea.getLastStepVehicleNumber(cam) >= 0
+                    for cam in self.cams[direction]
+                )
+            except Exception:
+                ok = False
+            if ok:
+                self._health_down_steps[direction] += 1
+                if self._health_down_steps[direction] >= self._health_recovery_threshold:
+                    self.cams_healthy[direction] = True
+                    self._health_down_steps[direction] = 0
+                    log.info("Sensor for direction '%s' recovered; health restored.", direction)
+            else:
+                self._health_down_steps[direction] = 0
 
     def update_gui_pois(self):
         """Refreshes countdown timers and vehicle queue length texts in SUMO GUI."""

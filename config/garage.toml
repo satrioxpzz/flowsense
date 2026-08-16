@@ -4,8 +4,13 @@ db_engine = "sqlite"
 
 replication_factor = 1
 
+# P1-14: Garage v1.x refuses to start without rpc_secret + rpc_bind_addr.
+rpc_secret = "5697693d9608526c688d077b3f7ba11e49739a3072c1334b1fad7cc3504fc261"
+rpc_bind_addr = "[::]:3903"
+
 [s3_api]
-s3_region = "us-east-1"
+# Region MUST match GARAGE_REGION in .env (was "us-east-1" here vs "garage" there).
+s3_region = "garage"
 api_bind_addr = "[::]:3900"
 root_domain = ".s3.garage.localhost"
 

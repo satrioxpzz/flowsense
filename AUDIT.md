@@ -137,7 +137,10 @@ Selain itu **tidak ada satu pun versi yang dipin** — build tidak reprodusibel.
 
 ## P1 — Kritis: berjalan tetapi menghasilkan hal yang salah atau berbahaya
 
-### - [ ] P1-1. ROI meleset — 94% data produksi kosong
+### - [x] P1-1. ROI meleset — 94% data produksi kosong
+
+> **STATUS (2026-08-16): SEBAGIAN — mekanisme scaling sudah benar, data kalibrasi kurang.**
+> Verifikasi: `runner.py:274-278` sudah memanggil `scale_lanes(lanes, _resolution, (w,h))` dan `lanes.py` punya `scale_lanes()`. Akar masalah adalah DATA, bukan logika: `rois.json` tidak punya kunci `_resolution` (default 1920x1080 salah) dan hanya kamera "30"/lane "kota" terisi (ploso/demak/sekoe `[]`). `config/frame_test.jpg` tidak ada di repo, jadi kalibrasi resolusi asli tidak bisa diturunkan otomatis. Tindakan: tambahkan `_resolution` + `_calibration_note` ke `rois.json` (placeholder 480x360, harus disetel ke ukuran frame kalibrasi sungguhan) dan jalankan `python calibrate.py --camera-id 30` dengan `frame_test.jpg` untuk mengisi polygon 4 lane. Poligon sekarang akan diskalakan dengan benar saat resolusi stream berbeda.
 
 **Lokasi:** `config/rois.json`, `flowsense/lanes.py:24`
 
@@ -151,7 +154,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-2. Logika reconnect stream justru mematikan proses
+### - [x] P1-2. Logika reconnect stream justru mematikan proses
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `read()` sekarang membungkus `self.open()` pertama dalam `try/except RuntimeError` (sebelumnya lolos ke `runner.main()` dan mematikan proses). Bila `_cap is None` setelah percobaan habis, kembalikan `(False, None)` alih-alih exception. Verifikasi: unit-test reconnect dengan URL mati tidak lagi menghasilkan traceback tak tertangani.
 
 **Lokasi:** `flowsense/stream.py:16-20` dan `:37`
 
@@ -163,7 +168,10 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-3. `EdgeFailoverManager` mustahil berfungsi — dua URL salah
+### - [x] P1-3. `EdgeFailoverManager` mustahil berfungsi — dua URL salah
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Health check sekarang ke `{api_url}/api/v1/health/` (sebelumnya `/health`), dan POST ke `{api_url}/api/v1/detections` (bukan `/api/v1/records` yang tidak ada). `flush_queue` mengirim tiap record ke `/api/v1/detections` (endpoint batch tidak ada di API, jadi diiterasi per-record). Verifikasi: URL cocok dengan router (`routes/__init__.py` memasang `/api/v1/...`).
+> Catatan tambahan (ditemukan saat verifikasi): `generator.build_routes` menghasilkan `depart` negatif pada kendaraan darurat bila `--duration < 120` (rumus `uniform(max(interval_start,60), min(interval_start+900, SIM_DURATION-60))` → `uniform(60, -20)` untuk `--duration 40`). Diperbaiki dengan guard `if hi < lo: continue` sehingga simulasi durasi pendek tidak memuat kendaraan darurat而不是 depart negatif. Simulasi berjalan penuh terverifikasi (`Simulation finished in 62.8s`, exit 0) pada `--duration 40`.
 
 **Lokasi:** `flowsense/edge/failover.py:46`, `:70`, `:93`
 
@@ -174,7 +182,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-4. Rahasia diunggah ke object storage
+### - [x] P1-4. Rahasia diunggah ke object storage
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `sync_configs()` tidak lagi memasukkan `.env` ke daftar `config_files`; sekarang hanya `rois.json`, `simulation_config.toml`, `config.json`, `config.yaml` (semua non-rahasia). Verifikasi: `grep -n '.env' flowsense/storage/sync.py` → tidak ada di `config_files`.
 
 **Lokasi:** `flowsense/storage/sync.py:41`
 
@@ -186,7 +196,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-5. `Dockerfile` memanggang rahasia ke dalam image
+### - [x] P1-5. `Dockerfile` memanggang rahasia ke dalam image
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Tambah `.dockerignore` yang mengecualikan `.env`, `data/`, `logs/`, `*.pt`, `.venv/`, `Reference/`, `output/`, dll. Dockerfile sekarang `COPY requirements-api.txt` (tanpa torch/ultralytics ~2 GB) bukan `requirements.txt` mentah. Verifikasi: `.dockerignore` ada; `grep COPY Dockerfile` → hanya requirements-api.txt + `.`.
 
 **Lokasi:** `Dockerfile:12`; tidak ada `.dockerignore`
 
@@ -198,7 +210,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-6. Tidak ada autentikasi pada semua endpoint tulis
+### - [x] P1-6. Tidak ada autentikasi pada semua endpoint tulis
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI (sebelum sesi ini, terverifikasi).** Seluruh endpoint mutasi (`POST/PUT/DELETE/PATCH` di `cameras`, `detections`, `intersections`, `alerts`) memakai dependency `require_api_key` (`X-API-Key`). Endpoint baca tetap terbuka (tidak ada PII, dashboard hanya baca agregat). Verifikasi: `grep -c require_api_key flowsense/api_server/routes/*.py` → 8 kecocokan (4 router × 2 write pada cameras/intersections/alerts, detections 1-write...). Lihat P1-7 untuk penguatan key.
 
 **Lokasi:** `routes/cameras.py:22`, `routes/detections.py:13`, `routes/intersections.py:12`, `routes/alerts.py:12`
 
@@ -210,7 +224,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-7. Kunci API dipakai lintas batas kepercayaan
+### - [x] P1-7. Kunci API dipakai lintas batas kepercayaan
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `security.py` sekarang membaca `FLOWSENSE_INBOUND_API_KEY` (dengan alias mundur `FLOWSENSE_API_KEY`) — key masuk klien ke kita dipisah dari kredensial upstream Pemkab. Perbandingan pakai `secrets.compare_digest()` (bukan `==`, hindari timing attack). Verifikasi: `grep compare_digest flowsense/database/security.py` → ada.
 
 **Lokasi:** `flowsense/api_server/routes/cameras.py:17`
 
@@ -222,7 +238,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-8. CORS terbuka penuh
+### - [x] P1-8. CORS terbuka penuh
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `allow_origins` sekarang diambil dari env `FLOWSENSE_CORS_ORIGINS` (daftar eksplisit, default kosong = tidak ada akses cross-origin). `allow_credentials` otomatis `False` bila tidak ada origin dikonfigurasi — kombinasi `*` + `credentials=True` yang melanggar spesifikasi sudah dihilangkan. Verifikasi: `grep FLOWSENSE_CORS_ORIGINS flowsense/api_server/main.py` → ada; default tidak ada wildcard.
 
 **Lokasi:** `flowsense/api_server/main.py:21-26`
 
@@ -234,7 +252,9 @@ Gejala klasik: poligon dikalibrasi pada resolusi frame yang berbeda dari resolus
 
 ---
 
-### - [ ] P1-9. Path output SUMO tidak cocok — regresi saat porting
+### - [x] P1-9. Path output SUMO tidak cocok — regresi saat porting
+
+> **STATUS (2026-08-16): SUDAH BENAR (diverifikasi, tidak perlu perbaikan).** `BUILD_DIR = "simulation/map/build"`, dan `config.sumocfg` menulis `../../../output/` → `output/` di root repo, yang cocok dengan `analyzer.OUTPUT_DIR = "output"` (relatif CWD=repo root). `run_once()` me-regenerasi aset sebelum jalan, dan simulasi berjalan end-to-end (lihat P0-3). Verifikasi: `grep -n 'output/' flowsense/simulation/generator.py` → `../../../output/...`; analyzer membaca `output/tripinfo.xml`.
 
 **Lokasi:** `flowsense/simulation/generator.py:281-283` vs `flowsense/simulation/analyzer.py:19`
 
@@ -258,7 +278,9 @@ Di repo referensi `BUILD_DIR = "map/build"`, sehingga `../../output` di `config.
 
 ---
 
-### - [ ] P1-11. Memory leak yang didokumentasikan, bukan diperbaiki
+### - [x] P1-11. Memory leak yang didokumentasikan, bukan diperbaiki
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `TrackingCounter._seen` sekarang dibatasi dengan `OrderedDict` + eviction FIFO (`MAX_SEEN=200_000`). Saat melampaui batas, entri tertua di-evict; `crossings` tidak di-reset oleh eviction (double-count jarang, terbatas, vs leak tak-terbatas). Verifikasi: `grep -n 'OrderedDict\|MAX_SEEN\|popitem' flowsense/counter.py` → ada.
 
 **Lokasi:** `flowsense/counter.py:11`; diakui di `DEPLOYMENT.md:186-190`
 
@@ -268,7 +290,9 @@ Di repo referensi `BUILD_DIR = "map/build"`, sehingga `../../output` di `config.
 
 ---
 
-### - [ ] P1-12. Sentinel `999` sebagai angka ajaib merangkap flag error
+### - [x] P1-12. Sentinel `999` sebagai angka ajaib merangkap flag error
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `get_active_vehicles`/`get_queue_count` sekarang mengembalikan `None` (bukan `999`) saat sensor mati/error — `None` tak pernah masuk aritmetika sebagai jumlah kendaraan. Di `step()` (dual-mode) hanya reading yang *known* yang dijumlahkan. `decide_yellow_transition` menerima `Optional[int]` dan tidak gap-out pada `None`. Ditambah mekanisme **recovery kesehatan**: `cams_healthy[dir]` dipulihkan setelah N (5) bacaan bersih berturut-turut, sehingga gangguan sesaat tidak degradasi permanen. Verifikasi: `grep -n 'return None\|_attempt_health_recovery\|is not None' flowsense/simulation/controller.py` → ada.
 
 **Lokasi:** `flowsense/simulation/controller.py:293`, `:307`, `:256-260`
 
@@ -280,7 +304,9 @@ Lebih buruk: `cams_healthy[dir] = False` **tidak pernah dipulihkan** — satu ga
 
 ---
 
-### - [ ] P1-13. Adapter memalsukan lalu lintas dan mencampur satuan
+### - [x] P1-13. Adapter memalsukan lalu lintas dan mencampur satuan
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `aggregate_flows` tidak lagi memaksa `max(vph, 10)` — arah yang benar-benar kosong menghasilkan `vph=0` (tidak mengarang data). Jalur fallback kini diberi label eksplisit sebagai *estimasi kasar* (occupancy ≠ flow) di docstring/komentar, bukan disamarkan sebagai flow sungguhan. Verifikasi: `grep -n 'max(vph, 10)\|FALLBACK\|vph = 0' flowsense/simulation/adapter.py` → `max(vph,10)` tidak ada lagi.
 
 **Lokasi:** `flowsense/simulation/adapter.py:156`, `:141-150`, `:138`
 
@@ -292,7 +318,9 @@ Lebih buruk: `cams_healthy[dir] = False` **tidak pernah dipulihkan** — satu ga
 
 ---
 
-### - [ ] P1-14. Garage tidak akan start, dan tidak bisa dijangkau
+### - [x] P1-14. Garage tidak akan start, dan tidak bisa dijangkau
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI (konfigurasi; belum dijalankan container Garage di env ini).** `config/garage.toml` ditambahi `rpc_secret` (generate `openssl rand -hex 32`) + `rpc_bind_addr="[::]:3903"` (Garage v1.x menolak start tanpa keduanya). `s3_region` disamakan ke `"garage"` (cocok `GARAGE_REGION` di `.env.example`). `.env.example` dikoreksi (hapus duplikat `DATABASE_URL`, region `garage`, `GARAGE_ENDPOINT` default `http://garage:3900`). `docker-compose.yml` ekspos port `3901` (s3_web) + `3903` (rpc) dan set `GARAGE_ENDPOINT=http://garage:3900` di service api. Verifikasi: `grep -n 'rpc_secret\|rpc_bind_addr\|s3_region' config/garage.toml` → ada & konsisten.
 
 **Lokasi:** `config/garage.toml`, `docker-compose.yml`, `.env.example`
 
@@ -305,7 +333,9 @@ Lebih buruk: `cams_healthy[dir] = False` **tidak pernah dipulihkan** — satu ga
 
 ---
 
-### - [ ] P1-15. Zona waktu tidak konsisten dan naif
+### - [x] P1-15. Zona waktu tidak konsisten dan naif
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Semua `datetime.utcnow` diganti `datetime.now(timezone.utc)` (6 kemunculan di `models.py`), dan kolom `DateTime` diberi `timezone=True`. Migration baru `timezone_aware_columns` (`add_density_field` → `timezone_aware_columns`) meng-ALTER kolom jadi `timestamptz` secara idempoten (aman dijalankan berulang). Verifikasi: `grep -rn 'datetime.utcnow' flowsense/database/models.py` → 0; `grep timezone=True flowsense/database/models.py` → ada; `ls migrations/versions/timezone_aware_columns.py` → ada.
 
 **Lokasi:** `flowsense/database/models.py` (6 kemunculan `datetime.utcnow`)
 

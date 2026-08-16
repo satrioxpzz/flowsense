@@ -75,12 +75,20 @@ def test_aggregate_flows_empty_records():
 
 
 def test_aggregate_flows_minimum_vph():
-    """Even with zero vehicles, minimum 10 vph is enforced."""
+    """P1-13: genuinely empty directions must yield 0 vph, not a fabricated minimum.
+
+    Previously this asserted a forced minimum of 10 vph for empty directions,
+    which invented traffic that does not exist. After the fix, an empty direction
+    produces vph=0.
+    """
     records = [
         {"ts": 0, "per_lane": {"kota": 0}, "crossings": {"kota": 0}},
         {"ts": 899, "per_lane": {"kota": 0}, "crossings": {"kota": 0}},
     ]
     flows = aggregate_flows(records, bin_seconds=900)
-    # demak/sekoe/ploso have zero crossings → clamped to 10 vph
-    assert flows["west"][0][2] == 10
-    assert flows["east"][0][2] == 10
+    # kota (south): 0 crossings → 0 vph
+    assert flows["south"][0][2] == 0
+    # ploso/demak/sekoe: no data → 0 vph (not a fabricated 10)
+    assert flows["north"][0][2] == 0
+    assert flows["west"][0][2] == 0
+    assert flows["east"][0][2] == 0

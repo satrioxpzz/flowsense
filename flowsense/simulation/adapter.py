@@ -138,22 +138,25 @@ def aggregate_flows(
                 delta = last_cross.get(lane_name, 0) - first_cross.get(lane_name, 0)
                 direction_counts[direction] += max(0, delta)
         else:
-            # Fallback: average per_lane snapshot counts across the bin
+            # FALLBACK (coarse estimate, NOT a true flow measurement):
+            # the per_lane snapshot is a count of vehicles *present* (occupancy),
+            # not a rate. We average it across the bin and label it explicitly as
+            # an estimate. We do NOT fabricate a minimum of 10 vph for directions
+            # that are genuinely empty (P1-13).
             for rec in bin_records:
                 per_lane = rec.get("per_lane", {})
                 for lane_name, direction in mapping.items():
                     direction_counts[direction] += per_lane.get(lane_name, 0)
-            # Average per record, then scale
             n = len(bin_records)
             if n > 0:
                 for d in direction_counts:
                     direction_counts[d] = direction_counts[d] // n
 
-        # Convert to vehicles/hour
+        # Convert to vehicles/hour. Allow 0 for genuinely empty directions
+        # (P1-13): do not invent a minimum flow.
         scale = 3600 / bin_seconds
         for direction in result:
             vph = int(direction_counts.get(direction, 0) * scale)
-            vph = max(vph, 10)  # Minimum 10 vph to avoid empty routes
             result[direction].append((begin, end, vph))
 
     return result

@@ -18,7 +18,9 @@ services:
     image: dxflrs/garage:v1.1.0
     ports:
       - "3900:3900"
+      - "3901:3901"
       - "3902:3902"
+      - "3903:3903"
     volumes:
       - garage-data:/var/lib/garage
       - ./config/garage.toml:/etc/garage.toml
@@ -34,6 +36,9 @@ services:
       - postgres
     env_file:
       - .env
+    # P1-14: inside the compose network the garage service is reachable by name.
+    environment:
+      - GARAGE_ENDPOINT=http://garage:3900
     networks:
       - flowsense-network
 
