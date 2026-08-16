@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlowSense — Live Monitoring</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    -webkit-font-smoothing: antialiased; color: #d7dde3; background: #0f141a; line-height: 1.4;
+  }
+  .bar { background: #161c24; border-bottom: 1px solid #232c36; padding: 8px 14px;
+    display: flex; align-items: center; gap: 16px; font-size: 12px; }
+  .brand { color: #4fd18b; font-weight: 700; letter-spacing: .04em; }
+  .tag { color: #6b7785; } .tag b { color: #4fd18b; }
+  .wrap { padding: 12px 14px; }
+  .toolbar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .btn { font: inherit; font-size: 11px; padding: 4px 9px; background: #1b222b; color: #aeb8c2;
+    border: 1px solid #2a333e; border-radius: 5px; cursor: pointer; }
+  .btn.on { background: #1f3a2b; color: #4fd18b; border-color: #2c5740; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #1c242d; }
+  th { color: #6b7785; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .06em;
+    position: sticky; top: 0; background: #0f141a; }
+  tbody tr:hover { background: #161c24; cursor: pointer; }
+  tbody tr.sel { background: #16241b; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .st { font-size: 10px; padding: 1px 6px; border-radius: 4px; }
+  .st.ok { background: #16301f; color: #4fd18b; }
+  .st.warn { background: #322713; color: #e0b252; }
+  .st.crit { background: #311717; color: #ef6161; }
+  .layout { display: grid; grid-template-columns: 1fr 300px; gap: 12px; }
+  .spark { display: inline-block; vertical-align: middle; }
+  .pane { background: #11171e; border: 1px solid #1c242d; border-radius: 6px; padding: 10px; }
+  .pane h3 { font-size: 11px; color: #6b7785; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; font-weight: 600; }
+  .alert { font-size: 11px; padding: 6px 0; border-bottom: 1px solid #1c242d; }
+  .alert .t { color: #5a6672; }
+  .mini { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 10px; }
+  .mini .b { background: #11171e; border: 1px solid #1c242d; border-radius: 6px; padding: 8px; }
+  .mini .l { font-size: 9px; color: #6b7785; text-transform: uppercase; }
+  .mini .v { font-size: 18px; color: #e8edf2; font-weight: 700; }
+  .err { color: #ef6161; font-size: 11px; padding: 8px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="brand">FLOWSENSE</span>
+  <span class="tag">cluster: <b>kudus-prod</b></span>
+  <span class="tag">nodes: <b id="nodes">0/0</b></span>
+  <span class="tag">ingest: <b id="lat">--</b></span>
+  <span class="tag" id="clk">--:--:--</span>
+</div>
+<div class="wrap">
+  <div class="toolbar">
+    <button class="btn on" id="bl" onclick="toggle()">⏸ PAUSE</button>
+    <button class="btn" onclick="flt('all')">ALL</button>
+    <button class="btn" onclick="flt('warn')">WARN</button>
+    <button class="btn" onclick="flt('crit')">CRIT</button>
+    <button class="btn" onclick="sortBy()">SORT: total ▼</button>
+  </div>
+  <div class="mini">
+    <div class="b"><div class="l">veh / min</div><div class="v" id="mt">--</div></div>
+    <div class="b"><div class="l">alerts</div><div class="v" id="alN" style="color:#ef6161">0</div></div>
+    <div class="b"><div class="l">density</div><div class="v" id="dens">0%</div></div>
+  </div>
+  <div class="layout">
+    <div class="pane">
+      <h3>Camera feed — per-lane vehicle counts</h3>
+      <table>
+        <thead><tr><th>cam</th><th>name</th><th>st</th><th class="num">kota</th><th class="num">ploso</th><th class="num">demak</th><th class="num">sekoe</th><th class="num">Σ</th><th>trend</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="9" class="err">loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pane">
+      <h3>Active alerts</h3>
+      <div id="al"><div class="err">loading…</div></div>
+    </div>
+  </div>
+  <div id="err" class="err"></div>
+</div>
+<script>
+let DATA = {cameras:[], kpis:{}, alerts:[]};
+let sortDir = -1, live = true;
+
+function spark(h){ if(!h||!h.length) return '';
+  const w=44,hg=14,mx=Math.max(...h,1);
+  const pts=h.map((v,i)=>`${(i/(h.length-1)*w).toFixed(1)},${(hg-v/mx*hg).toFixed(1)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${hg}"><polyline points="${pts}" fill="none" stroke="#4fd18b" stroke-width="1.2"/></svg>`; }
+const sum = c => (c.lanes?Object.values(c.lanes).reduce((a,b)=>a+b,0):0);
+
+async function load(){
+  try{
+    const r = await fetch('/api/v1/dashboard/data');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    DATA = await r.json();
+    document.getElementById('err').textContent='';
+    render();
+  }catch(e){
+    document.getElementById('err').textContent='Gagal muat data: '+e.message;
+  }
+}
+function render(){
+  const cams=[...DATA.cameras].sort((a,b)=>sortDir*(sum(a)-sum(b)));
+  document.getElementById('rows').innerHTML = cams.map(c=>{
+    const l=c.lanes||{}; const stt={ok:'OK',warn:'WARN',crit:'CRIT'}[c.status];
+    return `<tr data-st="${c.status}" class="${c.id===String(DATA.cameras[0]?.id)?'sel':''}">
+      <td>${c.id}</td><td>${c.name||('cam '+c.id)}</td>
+      <td><span class="st ${c.status}">${stt}</span></td>
+      <td class="num">${l.kota??0}</td><td class="num">${l.ploso??0}</td>
+      <td class="num">${l.demak??0}</td><td class="num">${l.sekoe??0}</td>
+      <td class="num">${sum(c)}</td><td>${spark(c.spark)}</td></tr>`;
+  }).join("");
+  document.getElementById('al').innerHTML = (DATA.alerts&&DATA.alerts.length)
+    ? DATA.alerts.map(a=>`<div class="alert"><span class="st ${a.severity}">${a.severity.toUpperCase()}</span> ${a.camera}<br>${a.detail}</div>`).join("")
+    : '<div class="err">tidak ada alert</div>';
+  const k=DATA.kpis||{};
+  document.getElementById('mt').textContent=k.vehicles_per_min??'--';
+  document.getElementById('alN').textContent=k.alerts??0;
+  document.getElementById('dens').textContent=(k.avg_density_pct??0)+'%';
+  document.getElementById('nodes').textContent=(k.active_cameras??0)+'/'+(k.active_cameras??0);
+  document.getElementById('lat').textContent='live';
+}
+function flt(s){ document.querySelectorAll("#rows tr").forEach(e=>e.style.display=(s==="all"||e.dataset.st===s)?"":"none"); }
+function sortBy(){ sortDir*=-1; render(); }
+function toggle(){ live=!live; const b=document.getElementById('bl'); b.textContent=live?"⏸ PAUSE":"▶ RESUME"; b.classList.toggle("on",live); }
+function clk(){ document.getElementById('clk').textContent=new Date().toLocaleTimeString("id-ID"); }
+setInterval(()=>{ if(live) load(); }, 2000);
+setInterval(clk,1000); clk(); load();
+</script>
+</body>
+</html>
