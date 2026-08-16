@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -16,7 +16,8 @@ router = APIRouter()
 async def list_alerts(
     intersection_id: int = None,
     acknowledged: bool = None,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """Return alerts with optional filters. Read-only."""
@@ -25,7 +26,7 @@ async def list_alerts(
         stmt = stmt.where(Alert.intersection_id == intersection_id)
     if acknowledged is not None:
         stmt = stmt.where(Alert.acknowledged == acknowledged)
-    stmt = stmt.order_by(Alert.created_at.desc()).limit(limit)
+    stmt = stmt.order_by(Alert.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.scalars().all()
 

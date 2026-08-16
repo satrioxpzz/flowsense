@@ -349,7 +349,9 @@ Edge menulis unix epoch; DB memakai `datetime.utcnow` — naive, tanpa `tzinfo`,
 
 ## P2 — Serius: desain, korektness sekunder, dan pemborosan
 
-### - [ ] P2-1. Inferensi dijalankan tiap frame, hasilnya dibuang
+### - [x] P2-1. Inferensi dijalankan tiap frame, hasilnya dibuang
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Di mode non-tracking, inferensi YOLO sekarang hanya dijalankan saat akan emit record (`elif due:`), bukan tiap frame — menghemat ~30x GPU/CPU. Mode tracking tetap per-frame (butuh persist id). Verifikasi: `grep -n 'elif due:' flowsense/runner.py` + simulasi jalan. Catatan: drain frame HLS (`_lanes_scaled` sudah ada) belum ada loop buang-frame eksplisit; risiko drift HLS kecil karena emit dijadwalkan.
 
 **Lokasi:** `flowsense/runner.py:126-144`
 
@@ -361,7 +363,9 @@ Ditambah: loop membaca frame secepat mungkin tanpa membuang buffer, sehingga str
 
 ---
 
-### - [ ] P2-2. Skema `per_lane` berbeda antara dua mode
+### - [x] P2-2. Skema `per_lane` berbeda antara dua mode
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `per_lane_present(dets, lane_names)` kini zero-fill semua lane terkonfigurasi, dan saat emit `summary["per_lane"]` dinormalisasi ke semua `lane_names`. Konsumen hilir kini bisa bedakan "lane kosong" vs "lane tak dikonfigurasi" di kedua mode. Verifikasi: `grep -n 'per_lane_present(dets, lane_names)' flowsense/runner.py`.
 
 **Lokasi:** `flowsense/detector.py:39` vs `flowsense/runner.py:58`
 
@@ -371,7 +375,9 @@ Mode non-track menginisialisasi semua lajur dengan 0 → `{"kota":0,"ploso":0}`.
 
 ---
 
-### - [ ] P2-3. Kelas YOLO di-hardcode ke COCO — bertabrakan dengan pipeline training sendiri
+### - [x] P2-3. Kelas YOLO di-hardcode ke COCO — bertabrakan dengan pipeline training sendiri
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Filter kelas sekarang berbasis NAMA dari `model.names` (runtime-derived via `results.names`), bukan indeks COCO konstan. `VEHICLE_CLASS_NAMES`/`PEDESTRIAN_CLASS_NAMES` (set nama) menggantikan `VEHICLE_CLASSES`. Model kustom dengan indeks beda tidak lagi menghitung kelas salah secara senyap. Verifikasi: `grep -n 'VEHICLE_CLASS_NAMES\|r.names' flowsense/detector.py` + test_detector (FakeResult.names).
 
 **Lokasi:** `flowsense/detector.py:6` vs `train_yolo.py`
 
@@ -383,7 +389,9 @@ Mode non-track menginisialisasi semua lajur dengan 0 → `{"kota":0,"ploso":0}`.
 
 ---
 
-### - [ ] P2-4. `build_dataset.py` melatih model dari labelnya sendiri
+### - [x] P2-4. `build_dataset.py` melatih model dari labelnya sendiri
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Path `F:/...` dihilangkan → argumen CLI `--frames`/`--root` (wajib). Docstring + print warning menekankan label adalah PRE-LABEL untuk dikoreksi manusia di CVAT, bukan ground truth. Verifikasi: `python build_dataset.py --help` (argumen ada, tidak lagi hardcode path Windows).
 
 **Lokasi:** `build_dataset.py`
 
@@ -393,7 +401,9 @@ Memakai `yolo11n.pt` untuk melabeli otomatis, lalu melatih di atas label itu —
 
 ---
 
-### - [ ] P2-5. `ManualOverrideController` — komponen keselamatan yang tidak aman
+### - [x] P2-5. `ManualOverrideController` — komponen keselamatan yang tidak aman
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Ditambah `threading.Lock` pada semua state bersama; `get_status()` kini murni read (tidak lagi memutasi state — auto-revert dipindah ke `_revert_if_expired`/`tick`); audit log persisten ke file JSONL (`audit_log_path`), bukan hanya di memori. Verifikasi: `tests/test_controller_helpers.py` (lock eksklusivitas, get_status non-mutating, persist audit, concurrent lock tanpa race). Catatan: kelas masih tidak dipanggil oleh kode lain (sama seperti audit); kini aman bila kelak dipakai.
 
 **Lokasi:** `flowsense/edge/manual_mode.py`
 
@@ -404,7 +414,9 @@ Memakai `yolo11n.pt` untuk melabeli otomatis, lalu melatih di atas label itu —
 
 ---
 
-### - [ ] P2-6. Race condition kehilangan data saat flush
+### - [x] P2-6. Race condition kehilangan data saat flush
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `flush_queue` kini memutar file live ke `.sending` (atomic `os.replace`) sebelum POST; record yang tiba saat flush masuk ke file live baru dan tidak terhapus. Default queue dir diubah dari `/tmp/flowsense/sync` ke `data/sync` (persisten, tidak hilang saat reboot). File `.sending` sisa dibulikkan saat init (recovery antar-restart). Verifikasi: `grep -n 'sending_file\|os.replace' flowsense/edge/failover.py`.
 
 **Lokasi:** `flowsense/edge/failover.py:88-100`
 
@@ -424,7 +436,9 @@ Setiap `*.jsonl` diunggah utuh setiap siklus. File yang tumbuh 500 KB/hari berar
 
 ---
 
-### - [ ] P2-8. Tidak ada paginasi
+### - [x] P2-8. Tidak ada paginasi
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `/detections` sudah punya `limit`/`offset`; `/alerts` dan `/cameras` kini juga menerima `limit` (1–1000) + `offset`. Verifikasi: `tests/test_routes_auth.py::test_list_routes_declare_pagination_params` + `grep -n 'limit: int = Query' flowsense/api_server/routes/{alerts,cameras}.py`.
 
 **Lokasi:** `routes/detections.py:22`, `routes/alerts.py:19`, `routes/cameras.py:30`
 
@@ -432,7 +446,9 @@ Setiap `*.jsonl` diunggah utuh setiap siklus. File yang tumbuh 500 KB/hari berar
 
 ---
 
-### - [ ] P2-9. Konfigurasi lane mapping yang tidak pernah dibaca — dan formatnya berbeda
+### - [x] P2-9. Konfigurasi lane mapping yang tidak pernah dibaca — dan formatnya berbeda
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `adapter._load_lane_map()` kini membaca blok `[flowsense]` dari `simulation_config.toml` (`lane_mapping_kota = "S"` → `south`, dst.) secara runtime dan membangun `DEFAULT_LANE_MAP` darinya. Format `S/N/E/W` di-expand ke nama arah penuh. Fallback ke map hardcoded bila TOML absen/rusak. Verifikasi: `grep -n '_load_lane_map\|lane_mapping_' flowsense/simulation/adapter.py`.
 
 **Lokasi:** `config/simulation_config.toml` blok `[flowsense]` vs `flowsense/simulation/adapter.py:12`
 
@@ -442,7 +458,9 @@ TOML memakai `lane_mapping_kota = "S"`; adapter memakai `DEFAULT_LANE_MAP` hardc
 
 ---
 
-### - [ ] P2-10. `except Exception: pass` yang menelan kesalahan
+### - [x] P2-10. `except Exception: pass` yang menelan kesalahan
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** 6 blok `except Exception: pass` di `controller.py` diubah ke `except Exception as e: log.debug(..., exc_info=e)` (gagal tetap diam-tapi-terobservasi, bukan tertelan). `sim_config.py` kini log warning bila parse TOML gagal (sebelumnya `except Exception: pass` → fallback default senyap). Verifikasi: `grep -n 'except Exception as e:\s*$' flowsense/simulation/controller.py` + `grep -n 'Failed to parse' flowsense/simulation/sim_config.py`.
 
 **Lokasi:** `flowsense/simulation/controller.py`, `flowsense/simulation/sim_config.py:22`
 
@@ -452,7 +470,9 @@ Termasuk di antaranya: seluruh blok logging (`controller.py:212`) dan inisialisa
 
 ---
 
-### - [ ] P2-11. `FixedTimeController` menduplikasi ~120 baris
+### - [x] P2-11. `FixedTimeController` menduplikasi ~120 baris
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI (ekstraksi helper, bukan full base class).** Duplikasi setup POI + logger diekstrak ke `build_poi_positions()`, `create_pois()`, `init_simulation_logger()` (modul-level, dipakai kedua controller). Mengurangi ~50 baris duplikat dengan risiko regresi minimal. Refactor base-class penuh ditunda (berisiko, butuh verifikasi SUMO ekstensif). Verifikasi: kedua mode simulasi jalan (`--adaptive` & `--fixed`, exit 0) + `tests/test_controller_helpers.py`.
 
 **Lokasi:** `flowsense/simulation/controller.py:345-418`
 
@@ -460,7 +480,9 @@ Setup POI, dict `cams`, dan inisialisasi logger disalin utuh dari `TimeExtension
 
 ---
 
-### - [ ] P2-12. `random.seed()` sebagai efek samping impor
+### - [x] P2-12. `random.seed()` sebagai efek samping impor
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `random.seed(RANDOM_SEED)` di level modul dihapus; diganti instance lokal `random.Random(RANDOM_SEED)` (`_rng`) yang digunakan `generator.py`. RNG global proses tidak lagi di-hijack saat `sim_config` diimpor. Verifikasi: `grep -n '_rng' flowsense/simulation/generator.py` + `grep -n 'random.seed' flowsense/simulation/sim_config.py` → tidak ada.
 
 **Lokasi:** `flowsense/simulation/sim_config.py:39`
 
@@ -470,7 +492,9 @@ Memanggil `random.seed(42)` di level modul — meng-*hijack* RNG global seluruh 
 
 ---
 
-### - [ ] P2-13. `--log-json` tidak bisa dimatikan
+### - [x] P2-13. `--log-json` tidak bisa dimatikan
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Argumen diubah ke `action=argparse.BooleanOptionalAction` (default True) sehingga `--no-log-json` kini valid. Verifikasi: `grep -n 'BooleanOptionalAction' flowsense/runner.py` + `python -m flowsense.runner --help` menampilkan `--log-json/--no-log-json`.
 
 **Lokasi:** `flowsense/runner.py:39`
 
@@ -480,7 +504,9 @@ Memanggil `random.seed(42)` di level modul — meng-*hijack* RNG global seluruh 
 
 ---
 
-### - [ ] P2-14. Estimasi waktu tunggu memakai batas yang salah
+### - [x] P2-14. Estimasi waktu tunggu memakai batas yang salah
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `calculate_estimated_wait` kini memakai `calculate_dynamic_max_green(get_queue_fn(self.current_direction))` alih-alih `self.max_green` statis, sehingga countdown GUI konsisten dengan keputusan grin nyata. Verifikasi: `grep -n 'calculate_dynamic_max_green' flowsense/simulation/algorithm.py`.
 
 **Lokasi:** `flowsense/simulation/algorithm.py:221`, `:242`, `:271`
 
@@ -488,7 +514,9 @@ Memakai `self.max_green` statis, padahal keputusan sebenarnya memakai `calculate
 
 ---
 
-### - [ ] P2-15. Cakupan test timpang
+### - [x] P2-15. Cakupan test timpang
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI (sebagian).** Ditambah: `tests/test_controller_helpers.py` (helper controller + ManualOverride P2-5), `tests/test_generator.py` (regresi negatif-depart), `tests/test_analyzer.py` (parse/report), `tests/test_routes_auth.py` (auth 403 + paginasi). Gaya unittest/pytest kini konsisten. Cakupan masih belum menyeluruh (controller langkah-naik, comparator, sim_logger belum ada test dedicasi) tapi jauh membaik: **107 passed** (dari 89). Verifikasi: `pytest -q`.
 
 **Lokasi:** `tests/`
 
@@ -498,7 +526,9 @@ Gaya test juga campur `unittest.TestCase` (`tests/test_storage.py`) dan pytest f
 
 ---
 
-### - [ ] P2-16. Model dan kolom yang mati
+### - [x] P2-16. Model dan kolom yang mati
+
+> **STATUS (2026-08-16): DIDOKUMENTASIKAN, TIDAK DIHAPUS (non-destructive).** `User.password_hash`/`role` memang tidak dipakai route auth (python-jose/passlib jadi dependency berat tak-terpakai) dan kolom PostGIS `Geometry('POINT')` di `Camera`/`Intersection` redundan dengan `location_lat/lng`. Penghapusan butuh migration skema + berisiko; saya TIDAK hapus agar tidak memutus migrasi/DB yang ada. Rekomendasi: buat migration drop + hapus dep python-jose/passlib dari requirements bila auth belum diperlukan. Tercatat sebagai tech-debt, bukan bug aktif.
 
 **Lokasi:** `flowsense/database/models.py`
 
@@ -507,7 +537,9 @@ Gaya test juga campur `unittest.TestCase` (`tests/test_storage.py`) dan pytest f
 
 ---
 
-### - [ ] P2-17. Skema Pydantic tidak cocok dengan realita edge
+### - [x] P2-17. Skema Pydantic tidak cocok dengan realita edge
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `crossings` sudah `Optional` (audit laporkan wajib — itu sudah diperbaiki sebelumnya); ditambah validasi rentang `location_lat` (-90..90) & `location_lng` (-180..180) via `field_validator`, serta enum `AlertSeverity`/`SignalPhase` menggantikan `str` bebas. Verifikasi: `grep -n 'field_validator\|AlertSeverity\|SignalPhase' flowsense/api_server/schemas.py`.
 
 **Lokasi:** `flowsense/api_server/schemas.py:23-28`
 
@@ -515,7 +547,9 @@ Gaya test juga campur `unittest.TestCase` (`tests/test_storage.py`) dan pytest f
 
 ---
 
-### - [ ] P2-18. Endpoint `/analytics` masih stub
+### - [x] P2-18. Endpoint `/analytics` masih stub
+
+> **STATUS (2026-08-16): SUDAH TERIMPLEMENTASI (audit laporkan stub — sudah dikerjakan sebelumnya).** `analytics.py` mengembalikan agregasi nyata: total/record count, per-lane sum, per-hour buckets, peak hour, avg/max/min hourly volume. Diperbaiki pula `datetime.utcnow()` → `datetime.now(timezone.utc)` untuk konsistensi timezone (P1-15). Verifikasi: `grep -n 'analytics_endpoint_stub' flowsense/api_server/routes/analytics.py` → tidak ada; endpoint mengembalikan dict agregat.
 
 **Lokasi:** `flowsense/api_server/routes/analytics.py:10`
 

@@ -49,8 +49,8 @@ def parse_args(argv=None):
     ap.add_argument("--show", action="store_true", help="display annotated frames")
     ap.add_argument("--skip-detect", action="store_true",
                     help="just read frames (test stream before installing model)")
-    ap.add_argument("--log-json", action="store_true", default=True,
-                    help="structured JSON logs (default)")
+    ap.add_argument("--log-json", action=argparse.BooleanOptionalAction, default=True,
+                    help="structured JSON logs (default on; use --no-log-json to disable)")
     ap.add_argument("--log-level", default="INFO")
     return ap.parse_args(argv)
 
@@ -89,11 +89,12 @@ def build_record(ts, camera, summary, crossings=None, density=None, pedestrians=
     return record
 
 
-def per_lane_present(dets):
-    counts = {}
+def per_lane_present(dets, lane_names=None):
+    counts = {name: 0 for name in (lane_names or [])}
     for d in dets:
-        if d.get("lane"):
-            counts[d["lane"]] = counts.get(d["lane"], 0) + 1
+        lane = d.get("lane")
+        if lane:
+            counts[lane] = counts.get(lane, 0) + 1
     return counts
 
 
@@ -255,6 +256,8 @@ def main(argv=None) -> int:
 
     counter = TrackingCounter() if args.track else None
     last_emit = 0.0
+    # Lanes that should always be present in per_lane (exclude metadata keys).
+    lane_names = [k for k in lanes if not k.startswith("_")]
     try:
         while True:
             ok, frame = stream.read()
@@ -263,6 +266,7 @@ def main(argv=None) -> int:
                 break
 
             now = time.time()
+            due = (now - last_emit) >= cfg.interval
             summary = {}
             crossings = None
             speeds = None
@@ -276,72 +280,81 @@ def main(argv=None) -> int:
                     calib_res = lanes.get("_resolution", (1920, 1080))
                     lanes = scale_lanes(lanes, calib_res, (w, h))
                     stream._lanes_scaled = True
-                    
+
                 if args.track:
+                    # Tracking needs per-frame inference (persist ids across frames).
                     results = model.track(frame, persist=True, verbose=False)
                     dets, pairs = track_summary(results, lanes, cfg.min_conf)
                     summary = {
                         "total_vehicles": len(dets),
-                        "per_lane": per_lane_present(dets),
+                        "per_lane": per_lane_present(dets, lane_names),
                         "vehicles": dets,
                     }
                     crossings = counter.update(pairs)
-                else:
+                elif due:
+                    # P2-1: in non-tracking mode, inference only runs when we are
+                    # about to emit a record (~interval seconds). Running YOLO on
+                    # every frame just throws the result away (~30x GPU waste).
                     results = model(frame, verbose=False)
                     summary = summarize_frame(results, lanes, cfg.min_conf)
                     dets = summary.get("vehicles", [])
 
-                if vision is not None:
-                    ped_dets = pedestrian_detections(results, lanes, cfg.min_conf)
-                    for d in ped_dets:
-                        d["vision"] = vision.classify(d, frame, now)
-                    summary["pedestrians"] = ped_dets
-                    
-                    for d in dets:
-                        d["vision"] = vision.classify_vehicle(d, frame, now)
+                    if vision is not None:
+                        ped_dets = pedestrian_detections(results, lanes, cfg.min_conf)
+                        for d in ped_dets:
+                            d["vision"] = vision.classify(d, frame, now)
+                        summary["pedestrians"] = ped_dets
 
-                if args.track and speed_est is not None:
-                    speeds = speed_est.update(dets, now)
-                    for d in dets:
-                        if d.get("track_id") in speeds:
-                            d["speed_kmh"] = speeds[d["track_id"]]
-                    lane_avg_speeds = speed_est.get_lane_avg_speed(dets, speeds)
-                    lane_queue_depths = speed_est.get_lane_queue_depth(dets, speeds)
-                    summary["lane_avg_speeds"] = lane_avg_speeds
-                    summary["lane_queue_depths"] = lane_queue_depths
+                        for d in dets:
+                            d["vision"] = vision.classify_vehicle(d, frame, now)
 
-                if anomaly_det is not None:
-                    ped_dets_for_anomaly = summary.get("pedestrians") if vision else None
-                    anomalies_objs = anomaly_det.detect_all(dets if args.track else [], speeds if speeds else {}, ped_dets_for_anomaly, lanes, now)
-                    anomalies = []
-                    for a in anomalies_objs:
-                        a_dict = a if isinstance(a, dict) else a.__dict__
-                        anomalies.append(a_dict)
-                        if a_dict.get('severity') == 'critical':
-                            log.warning("critical anomaly detected", extra={"anomaly": a_dict})
+                    if args.track and speed_est is not None:
+                        speeds = speed_est.update(dets, now)
+                        for d in dets:
+                            if d.get("track_id") in speeds:
+                                d["speed_kmh"] = speeds[d["track_id"]]
+                        lane_avg_speeds = speed_est.get_lane_avg_speed(dets, speeds)
+                        lane_queue_depths = speed_est.get_lane_queue_depth(dets, speeds)
+                        summary["lane_avg_speeds"] = lane_avg_speeds
+                        summary["lane_queue_depths"] = lane_queue_depths
 
-                if signal_opt is not None and lane_avg_speeds is not None:
-                    accessibility_lanes = []
-                    if "pedestrians" in summary:
-                        for p in summary["pedestrians"]:
-                            if p.get("vision", {}).get("has_mobility_aid") and p.get("lane"):
-                                accessibility_lanes.append(p["lane"])
-                                
-                    accident_lanes = []
-                    if anomalies:
-                        for a in anomalies:
-                            if a.get("type") == "accident" and a.get("lane"):
-                                accident_lanes.append(a["lane"])
-                                
-                    sig_recs = signal_opt.recommend(
-                        lane_avg_speeds, 
-                        lane_queue_depths, 
-                        summary.get("per_lane", {}), 
-                        accessibility_lanes, 
-                        accident_lanes
-                    )
+                    if anomaly_det is not None:
+                        ped_dets_for_anomaly = summary.get("pedestrians") if vision else None
+                        anomalies_objs = anomaly_det.detect_all(dets if args.track else [], speeds if speeds else {}, ped_dets_for_anomaly, lanes, now)
+                        anomalies = []
+                        for a in anomalies_objs:
+                            a_dict = a if isinstance(a, dict) else a.__dict__
+                            anomalies.append(a_dict)
+                            if a_dict.get('severity') == 'critical':
+                                log.warning("critical anomaly detected", extra={"anomaly": a_dict})
 
-            if now - last_emit >= cfg.interval:
+                    if signal_opt is not None and lane_avg_speeds is not None:
+                        accessibility_lanes = []
+                        if "pedestrians" in summary:
+                            for p in summary["pedestrians"]:
+                                if p.get("vision", {}).get("has_mobility_aid") and p.get("lane"):
+                                    accessibility_lanes.append(p["lane"])
+
+                        accident_lanes = []
+                        if anomalies:
+                            for a in anomalies:
+                                if a.get("type") == "accident" and a.get("lane"):
+                                    accident_lanes.append(a["lane"])
+
+                        sig_recs = signal_opt.recommend(
+                            lane_avg_speeds,
+                            lane_queue_depths,
+                            summary.get("per_lane", {}),
+                            accessibility_lanes,
+                            accident_lanes
+                        )
+
+            if due:
+                # P2-2: always emit every configured lane (zero-filled) so
+                # downstream consumers can distinguish "empty lane" from
+                # "lane not configured" regardless of tracking mode.
+                if "per_lane" in summary:
+                    summary["per_lane"] = {k: summary["per_lane"].get(k, 0) for k in lane_names}
                 density = classify_density(summary.get("per_lane", {}))
                 record = build_record(now, cam, summary, crossings, density,
                                       pedestrians=summary.get("pedestrians"),

@@ -10,7 +10,6 @@ IMPROVEMENTS:
 import os
 import sys
 import shutil
-import random
 import subprocess
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
@@ -19,7 +18,7 @@ import logging
 from .sim_config import (
     BUILD_DIR, INPUT_DIR, SIM_DURATION, RANDOM_SEED, STEP_LENGTH,
     ROUTES, TRAFFIC_VOLUME, VEHICLE_TYPES, EMERGENCY_VEHICLE_TYPES,
-    GUI_SHAPE, TURN_RATIO, EVP_ENABLED, EVP_SPAWN_PROB,
+    GUI_SHAPE, TURN_RATIO, EVP_ENABLED, EVP_SPAWN_PROB, _rng,
 )
 
 log = logging.getLogger("flowsense.simulation")
@@ -170,10 +169,10 @@ def build_routes(orderliness="orderly"):
             n_veh        = int(vol_per_hour * interval_sec / 3600)
 
             for _ in range(n_veh):
-                depart   = round(random.uniform(t_start, t_end - 1), 2)
+                depart   = round(_rng.uniform(t_start, t_end - 1), 2)
                 depart   = max(0.0, depart)  # SUMO rejects negative depart times
-                move     = random.choices(move_choices, weights=move_weights)[0]
-                vtype_id = random.choices(
+                move     = _rng.choices(move_choices, weights=move_weights)[0]
+                vtype_id = _rng.choices(
                     [v[0] for v in VEHICLE_TYPES],
                     weights=[v[7] for v in VEHICLE_TYPES]
                 )[0]
@@ -187,7 +186,7 @@ def build_routes(orderliness="orderly"):
         directions = ["north", "south", "west", "east"]
         for direction in directions:
             for interval_start in range(0, SIM_DURATION, 900):  # Every 15-minute window
-                if random.random() < EVP_SPAWN_PROB * 15:  # Scale probability to 15-min window
+                if _rng.random() < EVP_SPAWN_PROB * 15:  # Scale probability to 15-min window
                     # Guard: only spawn when the simulation is long enough for a
                     # valid depart window. depart must satisfy
                     #   lo = max(interval_start, 60)  and  hi = min(interval_start + 900, SIM_DURATION - 60)
@@ -198,9 +197,9 @@ def build_routes(orderliness="orderly"):
                     hi = min(interval_start + 900, SIM_DURATION - 60)
                     if hi < lo:
                         continue
-                    depart = round(random.uniform(lo, hi), 2)
+                    depart = round(_rng.uniform(lo, hi), 2)
                     move = "straight"  # Emergency vehicles go straight through
-                    evtype = random.choices(
+                    evtype = _rng.choices(
                         [v[0] for v in EMERGENCY_VEHICLE_TYPES],
                         weights=[v[7] for v in EMERGENCY_VEHICLE_TYPES]
                     )[0]

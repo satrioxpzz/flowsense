@@ -221,7 +221,7 @@ class TimeExtensionAlgorithm:
                 if self.elapsed_green < self.min_green:
                     estimated_wait += (self.min_green - self.elapsed_green) + self.yellow_duration
                 elif vehicles > 0:
-                    estimated_wait += max(0.0, self.max_green - self.elapsed_green) + self.yellow_duration
+                    estimated_wait += max(0.0, self.calculate_dynamic_max_green(get_queue_fn(self.current_direction)) - self.elapsed_green) + self.yellow_duration
                 else:
                     estimated_wait += self.yellow_duration
             return estimated_wait

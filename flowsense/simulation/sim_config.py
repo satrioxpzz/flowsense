@@ -17,8 +17,11 @@ try:
 except ImportError:
     # Python < 3.11 fallback — use defaults
     pass
-except Exception:
-    pass
+except Exception as e:
+    # P2-10: previously swallowed silently — a malformed TOML would silently fall
+    # back to defaults, hiding misconfiguration. Log it instead.
+    import logging
+    logging.getLogger(__name__).warning("Failed to parse %s, using defaults: %s", _CONFIG_PATH, e)
 
 def _get(section: str, key: str, default):
     """Retrieve a value from the loaded TOML config with a fallback default."""
@@ -36,7 +39,9 @@ INPUT_DIR = "simulation/map"          # Input folder for static XML infrastructu
 SIM_DURATION = int(_get("simulation", "duration", 3600))
 RANDOM_SEED  = int(_get("simulation", "random_seed", 42))
 STEP_LENGTH  = float(_get("simulation", "step_length", 0.1))
-random.seed(RANDOM_SEED)
+# P2-12: do NOT call random.seed() at import time — it hijacks the global RNG of
+# the whole process. Use a dedicated, isolated Random instance instead.
+_rng = random.Random(RANDOM_SEED)
 
 # ---------------------------------------------------------
 #  ALGORITHM PARAMETERS (externalized from hardcoded values)

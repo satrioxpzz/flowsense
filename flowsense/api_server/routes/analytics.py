@@ -5,7 +5,7 @@ detections table: total/record counts, per-lane sums, and per-hour buckets for
 peak/off-peak classification. Read-only.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -27,7 +27,7 @@ async def get_analytics(
     """Aggregate traffic analytics for the dashboard over the lookback window."""
     if window_hours <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="window_hours must be positive")
-    since = datetime.utcnow() - timedelta(hours=window_hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
 
     base = select(Detection).where(Detection.timestamp >= since)
     if camera_id is not None:

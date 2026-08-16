@@ -1,20 +1,48 @@
 """Adapter to convert FlowSense CCTV vehicle counts into SUMO traffic demand."""
 import json
 import logging
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger("flowsense.simulation")
 
-# Default FlowSense lane name → SUMO compass direction mapping.
-# Configurable via simulation_config.toml [flowsense] section.
-DEFAULT_LANE_MAP = {
+# Single-letter compass codes used in simulation_config.toml [flowsense] block
+# (e.g. lane_mapping_kota = "S") expanded to full direction names.
+_COMPASS = {"N": "north", "S": "south", "E": "east", "W": "west"}
+_TOML_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "simulation_config.toml"
+
+# Hardcoded fallback — used only if the TOML is missing or has no [flowsense] block.
+_FALLBACK_LANE_MAP = {
     "kota": "south",
     "ploso": "north",
     "demak": "west",
     "sekoe": "east",
 }
+
+# P2-9: the [flowsense] TOML block used to be dead config (never read). Now we
+# build the default lane map FROM it so editing the TOML actually changes mapping.
+def _load_lane_map() -> dict:
+    if _TOML_PATH.exists():
+        try:
+            with open(_TOML_PATH, "rb") as f:
+                cfg = tomllib.load(f)
+            fs = cfg.get("flowsense", {})
+            mapping = {}
+            for key, val in fs.items():
+                if key.startswith("lane_mapping_"):
+                    lane = key[len("lane_mapping_"):]
+                    code = str(val).strip().upper()
+                    direction = _COMPASS.get(code, code.lower())
+                    mapping[lane] = direction
+            if mapping:
+                return mapping
+        except Exception:
+            log.warning("Failed to read lane mapping from %s; using fallback", _TOML_PATH)
+    return dict(_FALLBACK_LANE_MAP)
+
+DEFAULT_LANE_MAP = _load_lane_map()
 
 
 def lane_to_direction(lane_name: str, lane_map: dict | None = None) -> str:

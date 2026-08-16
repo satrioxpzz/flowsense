@@ -1,13 +1,41 @@
-from pydantic import BaseModel, ConfigDict
+from enum import Enum
+from pydantic import BaseModel, ConfigDict, field_validator
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+
+# P2-17: constrained enums instead of free-form str for status-like fields.
+class AlertSeverity(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+
+class SignalPhase(str, Enum):
+    red = "red"
+    yellow = "yellow"
+    green = "green"
 
 class CameraBase(BaseModel):
     name: str
     url: str
+    # P2-17: validate coordinates are within valid WGS84 ranges.
     location_lat: float
     location_lng: float
     status: Optional[str] = "offline"
+
+    @field_validator("location_lat")
+    @classmethod
+    def _check_lat(cls, v):
+        if not -90.0 <= v <= 90.0:
+            raise ValueError("location_lat must be between -90 and 90")
+        return v
+
+    @field_validator("location_lng")
+    @classmethod
+    def _check_lng(cls, v):
+        if not -180.0 <= v <= 180.0:
+            raise ValueError("location_lng must be between -180 and 180")
+        return v
 
 class CameraCreate(CameraBase):
     pass
@@ -23,6 +51,7 @@ class DetectionBase(BaseModel):
     timestamp: datetime
     total_vehicles: int
     per_lane: Dict[str, Any]
+    # P2-17: crossings already optional (edge omits it in non-tracking mode).
     crossings: Optional[Dict[str, Any]] = None
     density: Optional[Dict[str, Any]] = None
     pedestrians: Optional[int] = 0
@@ -45,6 +74,20 @@ class IntersectionBase(BaseModel):
     location_lng: float
     signal_config: Dict[str, Any]
 
+    @field_validator("location_lat")
+    @classmethod
+    def _check_lat(cls, v):
+        if not -90.0 <= v <= 90.0:
+            raise ValueError("location_lat must be between -90 and 90")
+        return v
+
+    @field_validator("location_lng")
+    @classmethod
+    def _check_lng(cls, v):
+        if not -180.0 <= v <= 180.0:
+            raise ValueError("location_lng must be between -180 and 180")
+        return v
+
 class IntersectionCreate(IntersectionBase):
     pass
 
@@ -54,7 +97,7 @@ class IntersectionResponse(IntersectionBase):
 
 class TrafficSignalBase(BaseModel):
     intersection_id: int
-    phase: str
+    phase: SignalPhase
     state: str
     duration: int
 
@@ -68,7 +111,7 @@ class TrafficSignalResponse(TrafficSignalBase):
 
 class AlertBase(BaseModel):
     type: str
-    severity: str
+    severity: AlertSeverity
     message: str
     intersection_id: int
 

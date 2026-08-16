@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
@@ -12,9 +12,13 @@ router = APIRouter()
 
 
 @router.get("/", response_model=List[CameraResponse])
-async def list_cameras(db: AsyncSession = Depends(get_db)):
-    """Return all registered cameras (read-only, no auth required)."""
-    result = await db.execute(select(Camera).order_by(Camera.id))
+async def list_cameras(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return registered cameras (read-only, no auth required)."""
+    result = await db.execute(select(Camera).order_by(Camera.id).limit(limit).offset(offset))
     return result.scalars().all()
 
 

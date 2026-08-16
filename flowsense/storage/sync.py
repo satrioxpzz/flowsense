@@ -2,10 +2,17 @@ import os
 import time
 import logging
 import threading
+from datetime import datetime
 from pathlib import Path
 from .garage import GarageStorageClient
 
 logger = logging.getLogger(__name__)
+
+# Files modified more recently than this are still being written by the edge
+# connector and are skipped on this sync cycle (P2-7). They will be uploaded
+# once they cool down, or after daily rotation.
+_ACTIVE_GRACE_SECONDS = 300
+
 
 class FlowSenseSyncManager:
     """Manages synchronization of FlowSense data to Garage storage."""
@@ -18,12 +25,26 @@ class FlowSenseSyncManager:
         self.thread = None
 
     def sync_detections(self):
-        """Sync only detection data (JSONL)."""
+        """Sync only detection data (JSONL).
+
+        P2-7: the live connector file grows continuously, so re-uploading it in
+        full every cycle is O(n^2) bandwidth. We only upload files that are not
+        actively being written (older than _ACTIVE_GRACE_SECONDS) — i.e. rotated
+        / closed files. The hot file is uploaded once it cools or after rotation.
+        """
         logger.info("Syncing detections...")
         self.client.ensure_bucket()
         data_path = Path(self.data_dir)
+        now = time.time()
         if data_path.exists():
             for file in data_path.glob("*.jsonl"):
+                try:
+                    mtime = file.stat().st_mtime
+                except OSError:
+                    continue
+                if now - mtime < _ACTIVE_GRACE_SECONDS:
+                    # Still being written by the connector; skip this cycle.
+                    continue
                 remote_key = f"detections/{file.name}"
                 self.client.upload_file(str(file), remote_key)
 
@@ -34,6 +55,27 @@ class FlowSenseSyncManager:
         if os.path.exists(self.model_path):
             remote_key = f"models/{os.path.basename(self.model_path)}"
             self.client.upload_file(self.model_path, remote_key)
+
+    def rotate_detections(self):
+        """Rotate active detection files into date-stamped, closed copies.
+
+        Renames `connector_30.jsonl` -> `connector_30.2026-08-16.jsonl` so the
+        previous day's data becomes a closed file that `sync_detections` will
+        upload in full exactly once (P2-7). The edge connector keeps appending
+        to the fresh, empty live file afterwards.
+        """
+        data_path = Path(self.data_dir)
+        if not data_path.exists():
+            return
+        stamp = datetime.now().strftime("%Y-%m-%d")
+        for file in data_path.glob("connector_*.jsonl"):
+            rotated = data_path / f"{file.stem}.{stamp}.jsonl"
+            try:
+                if file.stat().st_size == 0:
+                    continue
+                file.replace(rotated)
+            except OSError as e:
+                logger.warning("detection rotation failed for %s: %s", file, e)
 
     def sync_configs(self):
         """Sync only NON-SECRET config files.

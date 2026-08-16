@@ -18,6 +18,38 @@ from .sim_config import (
 log = logging.getLogger("flowsense.simulation")
 
 
+def build_poi_positions(cx: float, cy: float) -> dict:
+    """Compute the four countdown-timer POI positions around the junction (P2-11)."""
+    return {
+        "timer_N": (cx + 10.0, cy + 30.0),
+        "timer_S": (cx - 10.0, cy - 30.0),
+        "timer_W": (cx - 30.0, cy + 10.0),
+        "timer_E": (cx + 30.0, cy - 10.0),
+    }
+
+
+def create_pois(traci, poi_positions: dict) -> None:
+    """Create the countdown-timer POIs in SUMO. Shared by both controllers (P2-11)."""
+    for poi_id, (px, py) in poi_positions.items():
+        try:
+            traci.poi.add(poi_id, x=px, y=py, color=(0, 0, 0, 255), poiType="0", width=0.1, height=0.1)
+        except Exception as e:
+            log.debug("swallowed exception in traci/sensor call; continuing", exc_info=e)
+
+
+def init_simulation_logger(output_suffix: str = "") -> object | None:
+    """Build a SimulationLogger if logging is enabled. Shared by both controllers (P2-11)."""
+    try:
+        from .sim_logger import SimulationLogger
+        return SimulationLogger(
+            output_path=LOG_OUTPUT_FILE.replace(".csv", output_suffix + ".csv"),
+            interval_steps=LOG_INTERVAL_STEPS,
+        )
+    except Exception as e:
+        log.warning("Failed to initialize logger: %s", e)
+        return None
+
+
 class TimeExtensionController:
     def __init__(self, tls_id="center", min_green=None, max_green=None,
                  yellow_duration=None, enable_evp=None, enable_logging=None):
@@ -93,18 +125,8 @@ class TimeExtensionController:
 
         self.junction_pos = (cx, cy)
 
-        self.poi_positions = {
-            "timer_N": (cx + 10.0, cy + 30.0),
-            "timer_S": (cx - 10.0, cy - 30.0),
-            "timer_W": (cx - 30.0, cy + 10.0),
-            "timer_E": (cx + 30.0, cy - 10.0)
-        }
-
-        for poi_id, (px, py) in self.poi_positions.items():
-            try:
-                traci.poi.add(poi_id, x=px, y=py, color=(0, 0, 0, 255), poiType="0", width=0.1, height=0.1)
-            except Exception:
-                pass
+        self.poi_positions = build_poi_positions(cx, cy)
+        create_pois(traci, self.poi_positions)
 
         if self.evp_enabled:
             self._build_evp_direction_map()
@@ -117,16 +139,7 @@ class TimeExtensionController:
         self._health_down_steps = {d: 0 for d in ["N", "S", "E", "W"]}
         self._health_recovery_threshold = 5
 
-        self.logger = None
-        if _log_enabled:
-            try:
-                from .sim_logger import SimulationLogger
-                self.logger = SimulationLogger(
-                    output_path=LOG_OUTPUT_FILE,
-                    interval_steps=LOG_INTERVAL_STEPS,
-                )
-            except Exception as e:
-                log.warning("Failed to initialize logger: %s", e)
+        self.logger = init_simulation_logger() if _log_enabled else None
 
     def _build_evp_direction_map(self):
         """Build a mapping from incoming edge IDs to compass directions for EVP detection."""
@@ -221,8 +234,8 @@ class TimeExtensionController:
                     vehicles=vehicles,
                     elapsed_green=self.algorithm.elapsed_green,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("swallowed exception in traci/sensor call; continuing", exc_info=e)
 
         # 1. If currently in transition Yellow phase
         if self.algorithm.is_yellow_phase:
@@ -384,8 +397,8 @@ class TimeExtensionController:
             combined_text = f"[{timer_text} | Queue: {count}]"
             try:
                 traci.poi.setType(poi_id, combined_text)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("swallowed exception in traci/sensor call; continuing", exc_info=e)
 
     def finalize(self):
         """Clean up resources at simulation end."""
@@ -446,29 +459,10 @@ class FixedTimeController:
         except Exception:
             cx, cy = 400.0, 400.0
 
-        self.poi_positions = {
-            "timer_N": (cx + 10.0, cy + 30.0),
-            "timer_S": (cx - 10.0, cy - 30.0),
-            "timer_W": (cx - 30.0, cy + 10.0),
-            "timer_E": (cx + 30.0, cy - 10.0)
-        }
+        self.poi_positions = build_poi_positions(cx, cy)
+        create_pois(traci, self.poi_positions)
 
-        for poi_id, (px, py) in self.poi_positions.items():
-            try:
-                traci.poi.add(poi_id, x=px, y=py, color=(0, 0, 0, 255), poiType="0", width=0.1, height=0.1)
-            except Exception:
-                pass
-
-        self.logger = None
-        if _log_enabled:
-            try:
-                from .sim_logger import SimulationLogger
-                self.logger = SimulationLogger(
-                    output_path=LOG_OUTPUT_FILE.replace(".csv", "_fixed.csv"),
-                    interval_steps=LOG_INTERVAL_STEPS,
-                )
-            except Exception as e:
-                log.warning("Failed to initialize logger: %s", e)
+        self.logger = init_simulation_logger("_fixed") if _log_enabled else None
 
         log.info("Fixed-time TLS: Countdown timer overlay active (read-only, no phase override).")
 
@@ -513,8 +507,8 @@ class FixedTimeController:
                     vehicles=vehicles,
                     elapsed_green=0.0,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("swallowed exception in traci/sensor call; continuing", exc_info=e)
 
     def _is_green_in_state(self, state_string, direction):
         for idx in self.direction_links[direction]:
@@ -601,8 +595,8 @@ class FixedTimeController:
             combined_text = f"[{timer_text} | Queue: {count}]"
             try:
                 traci.poi.setType(poi_id, combined_text)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("swallowed exception in traci/sensor call; continuing", exc_info=e)
 
     def finalize(self):
         """Clean up resources at simulation end."""
