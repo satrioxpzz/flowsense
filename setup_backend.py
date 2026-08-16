@@ -1,7 +1,23 @@
+"""One-time backend scaffolding helper.
+
+WARNING (P3-24): this script was used to bootstrap the backend and APPENDS to
+requirements.txt / .env.example. Do NOT re-run it casually — it will duplicate
+entries and overwrite hand-maintained setup. It is kept only for reference /
+re-scaffolding on a clean checkout.
+"""
 import os
 import pathlib
+import sys
 
-base_dir = pathlib.Path(r"C:\Users\legion\flowsense")
+# P3-24: derive repo root from this file instead of a hardcoded path.
+base_dir = pathlib.Path(__file__).resolve().parent
+
+# Guard: refuse to run if the backend already looks scaffolded, to avoid
+# clobbering manual fixes (e.g. the split requirements files).
+if (base_dir / "flowsense" / "api_server").exists() and (base_dir / "requirements-api.txt").exists():
+    print("Backend already scaffolded; refusing to re-run setup_backend.py "
+          "to avoid overwriting manual changes. Exiting.", file=sys.stderr)
+    sys.exit(1)
 
 # Ensure base dir
 os.makedirs(base_dir, exist_ok=True)

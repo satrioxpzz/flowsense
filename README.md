@@ -12,6 +12,47 @@ pip install -r requirements.txt
 cp .env.example .env     # then fill in FLOWSENSE_API_KEY
 ```
 
+## Components
+
+FlowSense is more than the edge connector — it has four main pieces:
+
+- **Edge connector** (`connector.py` → `flowsense/runner.py`): reads an HLS feed,
+  runs YOLOv11, maps detections into per-lane ROIs, and emits tiny metadata JSON
+  (`data/connector_<camera_id>.jsonl`). Supports YOLO tracking for unique
+  lane-crossing counts.
+- **FastAPI backend** (`flowsense/api_server/`): async SQLAlchemy + PostGIS
+  storage of detections/alerts/cameras/intersections, with an X-API-Key-protected
+  write surface and open read endpoints. Analytics aggregation at `/api/v1/analytics`.
+- **SUMO simulation** (`flowsense/simulation/`): adaptive traffic-signal control
+  driven by the edge counts, plus a performance analyzer. Run with
+  `python -m flowsense.simulation --adaptive --duration 600`.
+- **GarageHQ storage** (`flowsense/storage/`): S3-compatible off-site sync of
+  detection JSONL and config files.
+
+## Run the backend (FastAPI)
+
+```bash
+pip install -r requirements-api.txt
+uvicorn flowsense.api_server.main:app --host 0.0.0.0 --port 8000
+# requires Postgres/PostGIS up (see docker-compose.yml)
+```
+
+## Run the SUMO simulation
+
+```bash
+export SUMO_HOME=$(python -c "import sumolib,os;print(os.path.dirname(sumolib.__file__))")
+python -m flowsense.simulation --adaptive --duration 600      # adaptive signals
+python -m flowsense.simulation --fixed    --duration 600      # read-only overlay
+```
+
+## Docker
+
+`docker-compose.yml` brings up Postgres/PostGIS, GarageHQ, and the API:
+
+```bash
+docker compose up --build
+```
+
 ## Calibrate lane ROIs
 
 Draw per-lane polygons on a frame; saved to `config/rois.json`.

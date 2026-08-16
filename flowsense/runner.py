@@ -10,7 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .api import fetch_cameras, find_camera
+from .cctv_client import fetch_cameras, find_camera
 from .config import load_config
 from .counter import TrackingCounter
 from .density import classify_density

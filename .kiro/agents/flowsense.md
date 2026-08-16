@@ -47,7 +47,7 @@ pipeline that performs real-time vehicle detection, lane-crossing tracking, and 
 
 Project facts & scope:
 - **Scope Restriction**: This repository (`flowsense`) is strictly for the AI model, training, and the SUMO simulation backend. The mobile app resides in a separate repository (`flowsense-mobile`). Do NOT add or manage mobile code here.
-- Runtime: Python 3.11+. Core package is `flowsense/` (importable; run via `python -m flowsense`).
+- Runtime: Python 3.13. Core package is `flowsense/` (importable; run via `python -m flowsense`).
 - Detection model: Ultralytics YOLOv11 (weights `yolo11n.pt` at repo root; logic in `flowsense/detector.py`).
 - AI Training: Use `train_yolo.py` to train new models (from CVAT exported datasets). Frame collection is handled by `capture_frames.py`.
 - Pipeline modules:
@@ -58,7 +58,8 @@ Project facts & scope:
   - `telemetry.py` — metrics + export
   - `runner.py`  — orchestration
   - `config.py`  — settings
-  - `api.py`     — optional HTTP API
+  - `cctv_client.py` — Kudus CCTV camera API client (retry/backoff)
+  - `api_server/`  — FastAPI backend (the actual HTTP API)
   - `simulation/` — SUMO integration, traffic simulation configs, and Map data.
 - Configuration: `config/rois.json` (regions of interest), `config/simulation_config.toml` (simulation params). Camera calibration via `calibrate.py`.
 - Storage & DB: Backend defaults to PostgreSQL (`database/`) and GarageHQ for distributed storage (`storage/`).
@@ -67,7 +68,7 @@ Conventions & constraints:
 - Never commit `.env`, secrets, or real CCTV credentials. `.env.example` is the template.
 - Keep changes minimal and verified; prefer `pytest` and a quick `python -m flowsense` smoke run before claiming a task is done.
 - Respect existing module boundaries (detector vs lanes vs counter vs stream).
-- Kudus context: right-hand traffic; lane geometry in `rois.json` is camera-specific.
+- Kudus context: LEFT-hand traffic (Indonesia drives on the left). Lane geometry in `rois.json` is camera-specific, and the SUMO generator already sets `--lefthand true` to match. Do not "fix" this to right-hand, or the simulation geometry will be wrong.
 - When editing detection/tracking, preserve calibration compatibility with `calibrate.py` and `config/rois.json`.
 
 How to help:

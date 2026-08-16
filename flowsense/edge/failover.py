@@ -29,6 +29,9 @@ class EdgeFailoverManager:
         self.is_connected = True
         self.sync_queue: List[Dict[str, Any]] = []
         self._background_task: Optional[asyncio.Task] = None
+        # P3-21: a single reusable AsyncClient for connection pooling, instead
+        # of opening a new one on every health-check / record / flush call.
+        self._client = httpx.AsyncClient(timeout=10.0)
         # Recover any records left mid-flush from a previous run.
         if self.sending_file.exists():
             try:
@@ -48,6 +51,7 @@ class EdgeFailoverManager:
                 await self._background_task
             except asyncio.CancelledError:
                 pass
+        await self._client.aclose()
 
     async def _health_check_loop(self):
         while True:
@@ -57,9 +61,8 @@ class EdgeFailoverManager:
     async def check_health(self):
         """Check connection to the central API server."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"{self.api_url}/api/v1/health/", timeout=2.0)
-                response.raise_for_status()
+            response = await self._client.get(f"{self.api_url}/api/v1/health/", timeout=2.0)
+            response.raise_for_status()
 
             if not self.is_connected:
                 await self.switch_to_remote()
@@ -83,8 +86,7 @@ class EdgeFailoverManager:
         """Record data, either sending to API or queuing locally."""
         if self.is_connected:
             try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(f"{self.api_url}/api/v1/detections", json=data)
+                await self._client.post(f"{self.api_url}/api/v1/detections", json=data)
             except Exception:
                 await self._queue_local(data)
         else:
@@ -137,9 +139,8 @@ class EdgeFailoverManager:
 
         logger.info(f"Flushing {len(to_send)} records...")
         try:
-            async with httpx.AsyncClient() as client:
-                for record in to_send:
-                    await client.post(f"{self.api_url}/api/v1/detections", json=record)
+            for record in to_send:
+                await self._client.post(f"{self.api_url}/api/v1/detections", json=record)
             logger.info("Flush successful.")
             if self.sending_file.exists():
                 self.sending_file.unlink()

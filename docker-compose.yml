@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgis/postgis:16-3.4
@@ -13,6 +11,13 @@ services:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - flowsense-network
+    # P3-19: healthcheck so the api container waits for Postgres to accept
+    # connections instead of racing at startup.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowsense -d flowsense"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   garage:
     image: dxflrs/garage:v1.1.0
@@ -32,13 +37,18 @@ services:
     build: .
     ports:
       - "8000:8000"
+    # P3-19: wait for postgres to be healthy before starting.
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
     # P1-14: inside the compose network the garage service is reachable by name.
     environment:
       - GARAGE_ENDPOINT=http://garage:3900
+    volumes:
+      # P3-19: persist local data (jsonl, frames, sync queue) across restarts.
+      - ./data:/app/data
     networks:
       - flowsense-network
 

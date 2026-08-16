@@ -16,31 +16,22 @@ import sys
 from pathlib import Path
 
 import cv2
-import requests
+
+from flowsense.config import load_config
+from flowsense.cctv_client import fetch_cameras
 
 BASE_DIR = Path(__file__).resolve().parent
 ROIS_PATH = BASE_DIR / "config" / "rois.json"
-
-from flowsense.config import load_config
 
 _CONFIG = load_config()
 API_URL = _CONFIG.api_url
 API_KEY = _CONFIG.api_key
 
 
-def fetch_cameras():
-    r = requests.get(API_URL, headers={"X-SDC": API_KEY}, timeout=25)
-    r.raise_for_status()
-    data = r.json()
-    if not data.get("success"):
-        raise RuntimeError(f"API failed: {data}")
-    return data["camera"]
-
-
 def load_camera(cam_id=None, url=None):
     if url:
         return {"id": "custom", "nama": "custom", "url": url}
-    cameras = fetch_cameras()
+    cameras = fetch_cameras(_CONFIG)
     for c in cameras:
         if str(c["id"]) == str(cam_id):
             return c
@@ -165,12 +156,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print("\n" + "*"*60)
-    print("🎯 FLOWSENSE CALIBRATION ACTIVATED 🎯")
-    print("Listen up! This is where the magic begins.")
-    print("You're not just drawing polygons; you're defining the AI's reality.")
-    print("Every vertex you place guides YOLOv11 to understand the city's pulse.")
-    print("Trace those lanes with precision. Let's lay the perfect foundation!")
-    print("Focus, click, and create the vision!")
-    print("*"*60 + "\n")
     sys.exit(main())

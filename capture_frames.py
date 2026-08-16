@@ -2,7 +2,7 @@ import argparse
 import cv2
 import os
 import time
-from flowsense.api import fetch_cameras
+from flowsense.cctv_client import fetch_cameras
 from flowsense.config import load_config
 from flowsense.stream import ReconnectingStream
 
@@ -41,7 +41,11 @@ def main():
             if not ok:
                 break
                 
-            out_path = os.path.join(args.out_dir, f"{cam_name}_{int(time.time())}.jpg")
+            # P3-22: use millisecond timestamp + per-camera counter so two
+            # frames grabbed in the same second (or across cameras) never
+            # overwrite each other.
+            ts = int(time.time() * 1000)
+            out_path = os.path.join(args.out_dir, f"{cam_name}_{ts}_{count}.jpg")
             cv2.imwrite(out_path, frame)
             count += 1
             print(f"Captured {count}/{args.limit} for {cam_name}")

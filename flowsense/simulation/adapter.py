@@ -150,7 +150,7 @@ def aggregate_flows(
     sorted_bin_keys = sorted(bins.keys())
     for bin_idx in sorted_bin_keys:
         bin_records = bins[bin_idx]
-        begin = int(first_ts + bin_idx * bin_seconds - first_ts)  # relative seconds
+        begin = int(bin_idx * bin_seconds)  # seconds relative to first_ts
         end = begin + bin_seconds
 
         direction_counts: dict[str, int] = defaultdict(int)

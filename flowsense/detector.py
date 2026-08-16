@@ -5,6 +5,11 @@ P2-3 fix: class filtering is now name-based, derived from the loaded model's
 class indices. This means a custom-trained model with different class indices
 no longer silently counts the wrong classes.
 """
+# P3-23: set the OpenMP duplicate-lib workaround at import time, BEFORE torch/
+# ultralytics (and their OpenMP libs) are imported — otherwise it is too late.
+import os
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 from typing import Dict, List, Optional, Tuple
 
 from .lanes import lane_from_detection
@@ -21,12 +26,8 @@ VEHICLE_CLASSES_COCO = {1: "bicycle", 2: "car", 3: "motorcycle", 5: "bus", 7: "t
 
 def load_model(model_path: str):
     """Lazy ultralytics import so unit tests run without it installed."""
-    import os
     import torch
     from ultralytics import YOLO
-
-    # Allow duplicate OpenMP libraries (conda + pytorch)
-    os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
     model = YOLO(model_path)
     # Move model to GPU if available

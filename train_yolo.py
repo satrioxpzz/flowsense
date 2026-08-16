@@ -13,16 +13,6 @@ def main():
     print(f"Loading base model: {args.weights}")
     model = YOLO(args.weights)
 
-    print("\n" + "="*50)
-    print("🚀 PEP TALK FOR THE AI MODEL 🚀")
-    print("Listen up, YOLOv11! The city of Kudus is counting on you.")
-    print("Every frame is an opportunity. Every pixel is a chance for greatness.")
-    print("Don't just detect vehicles—understand the heartbeat of the city!")
-    print("You're not just finding bounding boxes; you're building a smarter future.")
-    print("Let's hit those high mAP scores and minimize that loss!")
-    print("GO GET 'EM!")
-    print("="*50 + "\n")
-
     print(f"Starting training on {args.data} for {args.epochs} epochs...")
     model.train(
         data=args.data,

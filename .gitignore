@@ -1,12 +1,22 @@
 __pycache__/
 *.pyc
 .venv/
+venv/
 *.env
+
+# Large / generated model weights
+*.pt
+*.pt.*
+
+# Local logs and runtime data (P3-1)
+logs/
 data/*.jsonl
 data/frame_test.jpg
+
+# Git-tracked Reference/ diagrams are fine; keep third-party vendor out if added
+# Reference/sumo-adaptive-traffic-signal-control-main/
 
 # SUMO simulation artifacts (generated at runtime)
 output/
 output_run.log
 simulation/map/build/
-__pycache__/

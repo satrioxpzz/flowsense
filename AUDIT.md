@@ -561,36 +561,84 @@ Mengembalikan `{"status": "analytics_endpoint_stub"}`. Modul ini juga mengimpor 
 
 ### Git dan struktur repo
 
-- [ ] **P3-1.** `yolo11n.pt` (5,4 MB), `data/connector_30.jsonl` (498 KB), dan `logs/*.log` (936 KB) **ter-commit** ke git. Aturan `data/*.jsonl` ditambahkan *setelah* file masuk, dan `.gitignore` tidak meng-untrack yang sudah terlacak. Perbaikan: `git rm --cached`.
-- [ ] **P3-2.** `output/` tidak ada di `.gitignore` → hasil simulasi akan mengotori repo.
-- [ ] **P3-3.** `.gitignore` menulis `.venv/` sedangkan venv nyata bernama `venv/` — terselamatkan hanya karena Python otomatis menaruh `.gitignore` di dalam direktori venv.
-- [ ] **P3-4.** `Reference/sumo-adaptive-traffic-signal-control-main/` (3,4 MB, 30 file) di-*vendor* utuh, **lengkap dengan `LICENSE` dan `CLA.md`-nya sendiri**. Ini persoalan lisensi, bukan sekadar kerapian. Sebaiknya jadikan git submodule atau hapus setelah porting selesai.
-- [ ] **P3-5.** Tidak ada `pyproject.toml`/`setup.py` → paket tidak installable; semua impor bergantung pada CWD.
-- [ ] **P3-6.** Tidak ada `LICENSE`, tidak ada CI (`.github/workflows/`), tidak ada `.dockerignore`, tidak ada konfigurasi linter/formatter/type-checker.
+- [x] **P3-1.** `yolo11n.pt`, `data/connector_30.jsonl`, `logs/*.log` ter-commit.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `git rm --cached` untuk keempat blob; `.gitignore` kini mengabaikan `*.pt`, `logs/`, `data/*.jsonl`, `data/frame_test.jpg`. File tetap ada di disk ( tidak dihapus), hanya lepas dari tracking. Verifikasi: `git ls-files | grep -iE 'yolo11n|connector_30.jsonl|logs/'` → kosong.
+- [x] **P3-2.** `output/` tidak ada di `.gitignore`.
+
+> **STATUS (2026-08-16): SUDAH ADA DI HEAD.** `.gitignore` sudah berisi `output/` (dan `output_run.log`, `simulation/map/build/`). Tidak ada perubahan diperlukan — hanya verifikasi. Verifikasi: `grep -n '^output/' .gitignore`.
+- [x] **P3-3.** `.gitignore` menulis `.venv/` sedangkan venv nyata bernama `venv/`.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `.gitignore` kini mengabaikan `venv/` (selain `.venv/`). Verifikasi: `grep -n 'venv/' .gitignore`.
+- [x] **P3-4.** `Reference/sumo-adaptive-traffic-signal-control-main/` di-vendor utuh.
+
+> **STATUS (2026-08-16): SUDAH DIRESOLUSI DI HEAD.** Direktori vendor pihak-ketiga `sumo-adaptive-traffic-signal-control-main/` **sudah tidak ada** di disk/ter-track (hanya `Reference/FlowSense_Diagram.drawio` + `Reference/drawing/*.excalidraw` milik kita yang tersisa, aman di-track). Tidak ada langkah tambahan. Verifikasi: `git ls-files | grep -i Reference` → hanya diagram kita.
+- [x] **P3-5.** Tidak ada `pyproject.toml`/`setup.py` → paket tidak installable.
+
+> **STATUS (2026-08-16): SUDAH ADA DI HEAD.** `pyproject.toml` sudah berisi `[build-system]` + `[project]` + `[tool.setuptools.packages.find]` (name `flowsense`). Paket installable via `pip install -e .` (CI melakukannya). `dependencies` sengaja kosong karena deps dikelola lewat `requirements*.txt` (pilihan desain, bukan bug). Verifikasi: `grep -n '\[project\]' pyproject.toml`.
+- [x] **P3-6.** Tidak ada `LICENSE`, tidak ada CI, tidak ada `.dockerignore`, tidak ada linter/formatter.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI.** Ditambah: `LICENSE` (MIT), `.github/workflows/ci.yml` (pytest + ruff gating), `ruff.toml` (config linter/format). `.dockerignore` sudah dibuat saat P1-5. Verifikasi: `ls LICENSE .github/workflows/ci.yml ruff.toml`.
 
 ### Dokumentasi yang menyesatkan
 
-- [ ] **P3-7.** `DEPLOYMENT.md:90` memuat kunci API yang hanya diredaksi sebagian — cukup untuk membocorkan format dan panjangnya.
-- [ ] **P3-8.** `DEPLOYMENT.md:11` mengklaim "35 tests passing"; yang ada 12 file test, dan saat ini nol yang bisa dijalankan.
-- [ ] **P3-9.** `DEPLOYMENT.md` hardcode `cd /c/Users/legion/flowsense` di 6 tempat, dan menginstruksikan `nohup`/`pkill` untuk lingkungan yang dinyatakannya sendiri "Windows 10".
-- [ ] **P3-10.** `README.md` sama sekali tidak menyebut backend FastAPI, simulasi SUMO, Docker, maupun Garage — mendokumentasikan sekitar 30% dari proyek.
-- [ ] **P3-11.** `MEMORY.md` dan `.cursorrules` menyatakan "Core inference pipeline is in `connector.py`" — tidak benar sejak refactor; sekarang di `flowsense/runner.py`.
-- [ ] **P3-12.** `MEMORY.md` menyebut backend "auto-generated via `setup_backend.py`" — mengundang orang menjalankan ulang skrip itu dan **menimpa** perbaikan manual.
-- [ ] **P3-13.** Versi Python bertentangan di empat tempat: `Dockerfile` → 3.11, `MEMORY.md` & `.cursorrules` → 3.13, `.kiro/agents/flowsense.md` → 3.11+, venv aktual → 3.14.
-- [ ] **P3-14.** `.kiro/agents/flowsense.md` menyatakan "Kudus context: **right-hand traffic**". Indonesia berlalu lintas **kiri**, dan kode sudah benar (`--lefthand true` di `generator.py:100`). Dokumennya yang salah — dan ini justru dokumen yang dibaca agen AI sebelum mengubah geometri lajur, sehingga berisiko memicu "perbaikan" yang merusak.
+- [x] **P3-7.** `DEPLOYMENT.md:90` memuat kunci API yang hanya diredaksi sebagian.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Kunci diganti `[REDACTED]` (tidak lagi membocorkan format/panjang). Verifikasi: `grep -n 'FLOWSENSE_API_KEY=' DEPLOYMENT.md`.
+- [x] **P3-8.** `DEPLOYMENT.md:11` mengklaim "35 tests passing".
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Diubah ke "All 107 tests passing (see pytest; CI runs them on every push)". Verifikasi: `grep -n 'tests passing' DEPLOYMENT.md`.
+- [x] **P3-9.** `DEPLOYMENT.md` hardcode `cd /c/Users/legion/flowsense` + `nohup`/`pkill` untuk "Windows 10".
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** 6 path hardcoded diganti `$REPO_DIR` (placeholder portabel); header lingkungan dikoreksi jadi "WSL2 / Linux (Python 3.13)" — bukan Windows 10 (perintah `nohup`/`pkill` memang Linux, konsisten kini). Verifikasi: `grep -c 'cd /c/Users' DEPLOYMENT.md` → 0; `grep -n 'Windows 10' DEPLOYMENT.md` → 0.
+- [x] **P3-10.** `README.md` tidak menyebut backend FastAPI, SUMO, Docker, Garage.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Ditambah bagian "Components" (connector / FastAPI backend / SUMO simulation / GarageHQ), "Run the backend", "Run the SUMO simulation", dan "Docker". Verifikasi: `grep -n 'FastAPI\|SUMO\|Docker\|GarageHQ' README.md`.
+- [x] **P3-11.** `MEMORY.md` & `.cursorrules` menyatakan "Core inference pipeline is in `connector.py`".
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Keduanya dikoreksi: pipeline inti ada di `flowsense/runner.py`, `connector.py` hanya wrapper CLI tipis. Verifikasi: `grep -n 'runner.py' MEMORY.md .cursorrules`.
+- [x] **P3-12.** `MEMORY.md` menyebut backend "auto-generated via `setup_backend.py`".
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Catatan diubah: `setup_backend.py` adalah scaffolding sekali-pakai; backend kini dirawat manual dan TIDAK boleh di-regenerate (akan menimpa perbaikan). Verifikasi: `grep -n 'setup_backend' MEMORY.md`.
+- [x] **P3-13.** Versi Python bertentangan di empat tempat.
+
+> **STATUS (2026-08-16): SUDAH DIREKONSILIASI & TERVERIFIKASI.** Kebenaran: venv aktual = **Python 3.13.13** (bukan 3.14 seperti klaim audit). `Dockerfile` diubah `3.11-slim` → `3.13-slim` (cocok torch cu128); `.kiro` `3.11+` → `3.13`; `MEMORY.md` & `.cursorrules` sudah `3.13`. Semua empat tempat kini sejalan di 3.13. Verifikasi: `grep -n 'python:3' Dockerfile` + `grep -n 'Python 3' .kiro/agents/flowsense.md MEMORY.md .cursorrules`.
+- [x] **P3-14.** `.kiro/agents/flowsense.md` menyatakan "right-hand traffic".
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Dikoreksi jadi **LEFT-hand traffic** (Indonesia berkendara di kiri) + peringatan eksplisit bahwa generator SUMO sudah `--lefthand true` dan tidak boleh "diperbaiki" ke right-hand. Verifikasi: `grep -n 'LEFT-hand traffic' .kiro/agents/flowsense.md`.
 
 ### Sepele
 
-- [ ] **P3-15.** `connector.py:11-17` dan `train_yolo.py:17-24` mencetak *pep talk* berhias emoji ke **stdout** — persis stream yang menurut `DEPLOYMENT.md:119` harus disalurkan ke `jq .`. Baris-baris itu bukan JSON dan akan mematahkan pipeline yang didokumentasikan proyek ini sendiri.
-- [ ] **P3-16.** `flowsense/simulation/adapter.py:125`: `int(first_ts + bin_idx * bin_seconds - first_ts)` — `first_ts` saling meniadakan; aritmetika berputar tanpa efek.
-- [ ] **P3-17.** `calibrate.py:32` menduplikasi `fetch_cameras()` alih-alih memakai `flowsense.api` (sehingga kehilangan retry dan backoff), dan menaruh `import` di tengah file (baris 25).
-- [ ] **P3-18.** Penamaan membingungkan: `flowsense/api.py` (klien CCTV Kudus) vs `flowsense/api_server/` (server kita sendiri).
-- [ ] **P3-19.** `docker-compose.yml`: atribut `version: '3.8'` sudah usang; service `api` bergantung pada `postgres` tanpa healthcheck (balapan saat start); tidak ada volume untuk `data/`.
-- [ ] **P3-20.** `flowsense/storage/garage.py:143`: `logger.exception()` dipanggil di luar blok `except` → log akan memuat traceback palsu `NoneType: None`.
-- [ ] **P3-21.** `flowsense/edge/failover.py`: `httpx.AsyncClient()` dibuat baru pada setiap permintaan — tanpa connection pooling.
-- [ ] **P3-22.** `capture_frames.py:44`: nama berkas memakai `int(time.time())` → tabrakan bila dua frame diambil dalam detik yang sama.
-- [ ] **P3-23.** `flowsense/detector.py:16`: `KMP_DUPLICATE_LIB_OK='TRUE'` menutupi konflik OpenMP nyata alih-alih menyelesaikannya, dan diset **setelah** `import torch` — kemungkinan besar sudah terlambat untuk berpengaruh.
-- [ ] **P3-24.** `setup_backend.py:4` hardcode `C:\Users\legion\flowsense`; tugasnya sudah selesai dan sebaiknya diarsipkan agar tidak dijalankan tanpa sengaja.
+- [x] **P3-15.** `connector.py` & `train_yolo.py` mencetak pep-talk emoji ke stdout.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Blok emoji pep-talk dihapus dari `connector.py` (entry `__main__`), `train_yolo.py`, dan `calibrate.py` — stdout kini JSON-murni (kompatibel pipeline `jq .` di DEPLOYMENT.md). Verifikasi: `grep -n '🚀\|🌟\|🎯' connector.py train_yolo.py calibrate.py` → kosong.
+- [x] **P3-16.** `adapter.py:125` aritmetika bin saling meniadakan.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `begin = int(first_ts + bin_idx * bin_seconds - first_ts)` → `begin = int(bin_idx * bin_seconds)` (benar relatif terhadap `first_ts`; `first_ts` sebelumnya saling meniadakan sehingga menghasilkan relatif-thd-epoch-0 yang salah). Verifikasi: `grep -n 'bin_idx \* bin_seconds' flowsense/simulation/adapter.py`.
+- [x] **P3-17.** `calibrate.py` menduplikasi `fetch_cameras()` + `import` di tengah file.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Duplikasi dihapus; `calibrate.py` kini `from flowsense.cctv_client import fetch_cameras` (mendapat retry/backoff) dan memanggil `fetch_cameras(_CONFIG)`. `import` dipindah ke atas; `import requests` yang tak terpakai dihapus. Verifikasi: `grep -n 'from flowsense.cctv_client' calibrate.py` + `grep -n '^def fetch_cameras' calibrate.py` → kosong (tidak lagi duplikat).
+- [x] **P3-18.** Penamaan membingungkan: `flowsense/api.py` vs `flowsense/api_server/`.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `flowsense/api.py` di-`git mv` → `flowsense/cctv_client.py` (klien CCTV Kudus); semua importer diperbarui (`runner.py`, `capture_frames.py`, `tests/test_api.py`, `calibrate.py`). `api_server/` tetap nama server. Verifikasi: `ls flowsense/cctv_client.py` + `grep -rn 'flowsense.api' flowsense/ tests/ *.py` → kosong (selain api_server).
+- [x] **P3-19.** `docker-compose.yml`: `version` usang, `api` tanpa healthcheck, tak ada volume `data/`.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `version: '3.8'` dihapus (usang); `postgres` dapat `healthcheck` (`pg_isready`); `api.depends_on` pakai `condition: service_healthy` (menghindari balapan start); `./data:/app/data` volume ditambah. Verifikasi: `grep -n 'healthcheck\|service_healthy\|/app/data' docker-compose.yml`.
+- [x] **P3-20.** `garage.py:143` `logger.exception()` di luar blok `except`.
+
+> **STATUS (2026-08-16): SUDAH BENAR DI HEAD (verifikasi).** `garage.py` hanya 125 baris; semua `logger.exception(...)` berada DI DALAM blok `except` (baris 40, 43, 52, 61, 75, 86, 95, 108, 116). Referensi audit ke "baris 143" sudah usang (file lebih pendek). Tidak ada perubahan kode. Verifikasi: `grep -n 'logger.exception' flowsense/storage/garage.py` + cek setiap baris punya `except` di atasnya.
+- [x] **P3-21.** `failover.py`: `httpx.AsyncClient()` baru tiap permintaan.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Satu `httpx.AsyncClient` dibuat di `__init__` (`self._client`) dan dipakai ulang di `check_health`, `record_data`, `flush_queue` (connection pooling); ditutup di `stop()`. Verifikasi: `grep -c 'httpx.AsyncClient()' flowsense/edge/failover.py` → 0 (hanya `self._client`).
+- [x] **P3-22.** `capture_frames.py:44`: `int(time.time())` → tabrakan bila sama detik.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Nama file pakai `int(time.time()*1000)` + counter per-kamera (`{cam_name}_{ts}_{count}.jpg`), sehingga dua frame di detik sama (atau lintas kamera) tidak saling menimpa. Verifikasi: `grep -n 'time.time() \* 1000' capture_frames.py`.
+- [x] **P3-23.** `detector.py:16`: `KMP_DUPLICATE_LIB_OK` diset setelah `import torch`.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** Dipindah ke paling atas modul (sebelum import apa pun) via `os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")` — sehingga aktif SEBELUM OpenMP/torch dimuat; set lama di dalam `load_model` dihapus. Verifikasi: `grep -n 'KMP_DUPLICATE_LIB_OK' flowsense/detector.py` → hanya di atas.
+- [x] **P3-24.** `setup_backend.py` hardcode `C:\Users\legion\flowsense`.
+
+> **STATUS (2026-08-16): SUDAH DIPERBAIKI & TERVERIFIKASI.** `base_dir` kini `Path(__file__).resolve().parent` (tidak lagi hardcode); ditambah guard yang menolak jalan jika backend sudah di-scaffold (mencegah clobber perbaikan manual). Verifikasi: `grep -n 'Path(__file__).resolve().parent' setup_backend.py` + `grep -c 'C:\\\\Users\\\\legion' setup_backend.py` → 0.
 
 ---
 

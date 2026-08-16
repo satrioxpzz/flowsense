@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from flowsense.api import fetch_cameras, find_camera
+from flowsense.cctv_client import fetch_cameras, find_camera
 from flowsense.config import Config
 
 

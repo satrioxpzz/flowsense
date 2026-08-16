@@ -2,13 +2,13 @@
 
 **Status:** Ready for production deployment
 **Date:** 2026-08-02
-**Environment:** Windows 10, Python 3.13
+**Environment:** WSL2 / Linux (Python 3.13); the connector and API run under Linux, Docker Engine runs inside the WSL2 "Ubuntu" distro. The Windows host is only used for the terminal/git-bash wrapper.
 
 ---
 
 ## Pre-Deployment Checklist
 
-✓ All 35 tests passing
+✓ All 107 tests passing (see pytest; CI runs them on every push)
 ✓ API key configured in .env
 ✓ YOLO model (yolo11n.pt) downloaded
 ✓ ROIs calibrated for camera 30
@@ -25,7 +25,7 @@
 Run one camera in foreground to verify everything works:
 
 ```bash
-cd /c/Users/legion/flowsense
+cd "$REPO_DIR"   # REPO_DIR = where you cloned FlowSense (e.g. /home/legion/flowsense on WSL)
 python connector.py --camera-id 30
 ```
 
@@ -40,7 +40,7 @@ Press Ctrl+C to stop gracefully.
 Run one camera continuously in the background:
 
 ```bash
-cd /c/Users/legion/flowsense
+cd "$REPO_DIR"   # REPO_DIR = where you cloned FlowSense (e.g. /home/legion/flowsense on WSL)
 nohup python connector.py --camera-id 30 > logs/camera_30.log 2>&1 &
 ```
 
@@ -60,7 +60,7 @@ pkill -f "connector.py --camera-id 30"
 Run multiple cameras simultaneously, each tracking lane crossings:
 
 ```bash
-cd /c/Users/legion/flowsense
+cd "$REPO_DIR"   # REPO_DIR = where you cloned FlowSense (e.g. /home/legion/flowsense on WSL)
 
 # Create logs directory
 mkdir -p logs
@@ -87,7 +87,7 @@ nohup python connector.py --camera-id 30 --track > logs/camera_30.log 2>&1 &
 ### Recommended .env settings for production:
 
 ```bash
-FLOWSENSE_API_KEY=sdsi72...Sndj
+FLOWSENSE_API_KEY=[REDACTED]   # real value goes in .env, never committed
 FLOWSENSE_API_URL=https://kudussehat.kuduskab.go.id/api/get-cctv
 FLOWSENSE_API_TIMEOUT=30           # increased for production
 FLOWSENSE_API_RETRIES=5            # more retries
@@ -225,13 +225,13 @@ find logs/ -name "camera_*.log.gz" -mtime +90 -delete
 
 ### Quick Start (Single Camera):
 ```bash
-cd /c/Users/legion/flowsense
+cd "$REPO_DIR"   # REPO_DIR = where you cloned FlowSense (e.g. /home/legion/flowsense on WSL)
 python connector.py --camera-id 30 --track
 ```
 
 ### Production Start (Background with logging):
 ```bash
-cd /c/Users/legion/flowsense
+cd "$REPO_DIR"   # REPO_DIR = where you cloned FlowSense (e.g. /home/legion/flowsense on WSL)
 mkdir -p logs
 nohup python connector.py --camera-id 30 --track > logs/camera_30.log 2>&1 &
 echo $! > logs/camera_30.pid
@@ -240,7 +240,7 @@ tail -f logs/camera_30.log
 
 ### Production Stop:
 ```bash
-cd /c/Users/legion/flowsense
+cd "$REPO_DIR"   # REPO_DIR = where you cloned FlowSense (e.g. /home/legion/flowsense on WSL)
 kill $(cat logs/camera_30.pid)
 rm logs/camera_30.pid
 ```
