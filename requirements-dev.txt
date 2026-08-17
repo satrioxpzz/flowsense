@@ -12,7 +12,7 @@ respx==0.22.0
 httpx[http2]==0.28.1
 aiohttp==3.11.0
 fakeredis[lua]==2.26.0
-faker==31.4.0
+faker==30.3.0
 
 # Formatting / linting / typing
 black==24.10.0

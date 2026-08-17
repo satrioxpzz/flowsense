@@ -2,14 +2,17 @@
 # Pulls in the heavy ML stack (torch + ultralytics + opencv) used by the
 # on-device inference pipeline. NOT needed by the API server.
 #
-# torch / torchvision require the CUDA 12.8 wheel index:
-#   pip install -r requirements-edge.txt \
-#     --extra-index-url https://download.pytorch.org/whl/cu128
+# torch / torchvision require the CUDA 12.8 wheel index. The directive below
+# makes `pip install -r requirements-edge.txt` resolve them on a clean machine
+# (e.g. CI) without needing an extra --extra-index-url on the command line.
+--extra-index-url https://download.pytorch.org/whl/cu128
 
 -r requirements.txt
 
 # Computer vision + ML inference
-numpy==2.4.4
+# numpy 1.26.4 is required: ultralytics / opencv / torch cu128 wheel builds
+# resolve against numpy<2; numpy 2.x triggers ResolutionImpossible.
+numpy==1.26.4
 opencv-python==4.10.0.84
 ultralytics==8.2.88
 torch==2.11.0+cu128

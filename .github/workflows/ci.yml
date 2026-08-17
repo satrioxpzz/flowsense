@@ -20,6 +20,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
+          # P1-CI: the dev/test deps (pytest, pytest-asyncio, edge ML stack)
+          # live in requirements-dev.txt. Without this, `python -m pytest`
+          # fails on a clean runner because pytest is never installed.
+          pip install -r requirements-dev.txt
       - name: Compile check
         run: python -m compileall -q flowsense tests
       - name: Run tests

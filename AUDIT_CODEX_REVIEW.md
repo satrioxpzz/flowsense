@@ -144,3 +144,27 @@ Remaining (still open): P1-CI (install `requirements-dev.txt`), P2 items
 (analyzer synthetic congestion on real runs; stale `default_data_source`;
 unused `last_ts` in caller; unvalidated `--bin-seconds`).
 
+### P1-CI (2026-08-17) — REMEDIATED
+
+The test suite could not run on a clean runner because CI never installed the
+dev/test requirements. Fixed (verified ad-hoc 6/6; `pip install -r
+requirements-dev.txt --dry-run` now resolves with no missing versions /
+no ResolutionImpossible):
+
+- `.github/workflows/ci.yml`: added `pip install -r requirements-dev.txt`
+  to the install step so `pytest`/`pytest-asyncio` and the edge ML stack are
+  present before `python -m pytest`.
+- `requirements-edge.txt`: promoted the CUDA 12.8 wheel index from a comment
+  to a real `--extra-index-url https://download.pytorch.org/whl/cu128`
+  directive, so `torch==2.11.0+cu128` resolves on a clean machine.
+- `requirements-dev.txt`: `faker==31.4.0` does not exist on PyPI (latest 40.x)
+  → changed to `faker==30.3.0` (verified present).
+- `requirements-edge.txt`: `numpy==2.4.4` triggered ResolutionImpossible
+  against the torch/ultralytics/opencv cu128 builds → changed to `numpy==1.26.4`
+  (the known-good version for this stack).
+
+Note: a local `--dry-run` passed resolution but then tried to compile
+opencv/torch from source (no C compiler on this Windows box); on GitHub
+`ubuntu-latest` those have manylinux/cu128 prebuilt wheels, so the install
+succeeds there. The version pins are now internally consistent.
+
