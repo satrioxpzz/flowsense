@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import router
 from ..database.database import engine, Base
+from .routes import stream as stream_routes
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
+    await stream_routes._close_client()
 
 app = FastAPI(title="FlowSense API", lifespan=lifespan)
 

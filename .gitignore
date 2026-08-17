@@ -20,3 +20,6 @@ data/frame_test.jpg
 output/
 output_run.log
 simulation/map/build/
+
+# Ultralytics generated run outputs (eval/train curves, args)
+runs/

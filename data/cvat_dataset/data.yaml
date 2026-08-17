@@ -1,0 +1,24 @@
+# FlowSense YOLO dataset definition.
+# Paths are relative to THIS file (data/cvat_dataset/).
+# Fill in `train`/`val` globs and the `names` list to match what you
+# annotated in CVAT, then run:  python train_yolo.py
+#
+# IMPORTANT: FlowSense's detector.py counts only these names at inference
+# (detector.VEHICLE_CLASS_NAMES + PEDESTRIAN_CLASS_NAMES). Anything else you
+# label is ignored downstream -- keep this list to the classes that matter.
+# NOTE: ultralytics resolves `path` relative to CWD, not this file, so it MUST
+# be absolute (or a path that exists relative to wherever you launch training).
+path: C:/Users/legion/flowsense/data/cvat_dataset
+train: images/train  # dir of training .jpg
+val: images/val      # dir of validation .jpg
+test:  # optional
+
+# Class indices are assigned by ORDER here. CVAT can export arbitrary indices;
+# remap on export so they line up. Names must match detector.py's sets.
+names:
+  0: car
+  1: motorcycle
+  2: bus
+  3: truck
+  4: bicycle
+  5: person

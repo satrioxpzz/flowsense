@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import cameras, detections, intersections, alerts, analytics, health, dashboard
+from . import cameras, detections, intersections, alerts, analytics, health, dashboard, stream
 
 router = APIRouter()
 router.include_router(cameras.router, prefix="/cameras", tags=["Cameras"])
@@ -9,3 +9,4 @@ router.include_router(alerts.router, prefix="/alerts", tags=["Alerts"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 router.include_router(health.router, prefix="/health", tags=["Health"])
 router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+router.include_router(stream.router, prefix="/stream", tags=["Stream"])
