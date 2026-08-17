@@ -119,3 +119,28 @@ Deploy note: `.env` must now set `FLOWSENSE_INBOUND_API_KEY` and
 `POSTGRES_PASSWORD` (generate strong values) or the stack will refuse writes /
 fail to start postgres.
 
+### P1 adapter (2026-08-17) — REMEDIATED
+
+`flowsense/simulation/adapter.py:aggregate_flows` rewritten (verified ad-hoc
+7/7; live SUMO sim now injects ~2240 vehicles from `connector_30.jsonl` where
+it previously injected ~0/18):
+
+- **Crossings reset bug**: `crossings` is a cumulative per-lane counter that
+  resets intermittently. The old code used `last - first` over a bin, which
+  collapsed to ~0 vph under resets. Now counts actual crossings as the sum of
+  positive per-frame deltas, treating a negative step (reset) as the counter
+  wrapping to 0 (increment = post-reset value).
+- **Silent lanes stay 0**: `ploso`/`demak`/`sekoe` are never instrumented in
+  the real capture, so they correctly yield 0 vph (no fabricated traffic).
+- **Occupancy ≠ flow**: the no-`crossings` fallback now uses the authoritative
+  per-frame `total_vehicles` (a real count) split by `per_lane` occupancy
+  *share* — occupancy is a directional-split proxy only, never scaled to vph.
+- Removed unused `last_ts` local.
+- Tests added: `test_aggregate_flows_crossing_reset_yields_traffic`,
+  `test_aggregate_flows_silent_lanes_zero_on_real_data`,
+  `test_aggregate_flows_fallback_uses_total_vehicles_not_occupancy`.
+
+Remaining (still open): P1-CI (install `requirements-dev.txt`), P2 items
+(analyzer synthetic congestion on real runs; stale `default_data_source`;
+unused `last_ts` in caller; unvalidated `--bin-seconds`).
+

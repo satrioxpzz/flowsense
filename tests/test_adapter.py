@@ -94,7 +94,66 @@ def test_aggregate_flows_minimum_vph():
     assert flows["east"][0][2] == 0
 
 
-def test_set_real_traffic_volumes_populates_config():
+def test_aggregate_flows_crossing_reset_yields_traffic():
+    """Codex P1 fix: a cumulative counter with resets must NOT collapse to 0.
+
+    kota counts 1->5 then resets 5->0->5 repeatedly; the old last-first delta
+    over the bin was 0. The fixed logic sums positive steps and treats each
+    reset as a wrap, so the lane carries real vph and silent lanes stay 0.
+    """
+    records = [
+        {"ts": 0,   "total_vehicles": 2, "crossings": {"kota": 1}},
+        {"ts": 2,   "total_vehicles": 2, "crossings": {"kota": 5}},   # +4
+        {"ts": 4,   "total_vehicles": 4, "crossings": {"kota": 0}},   # reset
+        {"ts": 6,   "total_vehicles": 4, "crossings": {"kota": 5}},   # +5 (post-reset)
+        {"ts": 8,   "total_vehicles": 3, "crossings": {"kota": 0}},   # reset
+        {"ts": 10,  "total_vehicles": 2, "crossings": {"kota": 3}},   # +3
+    ]
+    flows = aggregate_flows(records, bin_seconds=900)
+    # south (kota): 4 + 5 + 3 = 12 vehicles in 900s -> 48 vph
+    assert flows["south"][0][2] == 48
+    # ploso/demak/sekoe have no crossings data -> 0 vph (not fabricated)
+    assert flows["north"][0][2] == 0
+    assert flows["west"][0][2] == 0
+    assert flows["east"][0][2] == 0
+
+
+def test_aggregate_flows_silent_lanes_zero_on_real_data():
+    """Regression: with real connector data only kota is instrumented; the
+    other three directions must be 0, not invented traffic."""
+    from pathlib import Path
+    p = Path(__file__).resolve().parent.parent.parent / "data" / "connector_30.jsonl"
+    if not p.exists():
+        import pytest
+        pytest.skip("connector_30.jsonl not present")
+    from flowsense.simulation.adapter import load_records
+    recs = load_records(p)
+    flows = aggregate_flows(recs, bin_seconds=900)
+    # Every direction key present; at least one bin has data.
+    assert set(flows) == {"north", "south", "east", "west"}
+    total_south = sum(v for _, _, v in flows["south"])
+    # south (kota) carries real crossings-derived volume
+    assert total_south > 0
+    # ploso/demak/sekoe are never instrumented in this capture -> all-zero
+    assert all(v == 0 for _, _, v in flows["north"])
+    assert all(v == 0 for _, _, v in flows["west"])
+    assert all(v == 0 for _, _, v in flows["east"])
+
+
+def test_aggregate_flows_fallback_uses_total_vehicles_not_occupancy():
+    """No crossings field: use total_vehicles, split by per_lane occupancy share."""
+    records = [
+        {"ts": 0,   "total_vehicles": 10, "per_lane": {"kota": 3, "ploso": 1}},
+        {"ts": 2,   "total_vehicles": 10, "per_lane": {"kota": 3, "ploso": 1}},
+    ]
+    flows = aggregate_flows(records, bin_seconds=900)
+    # 20 total vehicles, split 3:1 -> south 15, north 5 (NOT scaled to vph as occupancy)
+    assert flows["south"][0][2] == 15 * 4   # *scale(4)
+    assert flows["north"][0][2] == 5 * 4
+    # unobserved directions stay 0
+    assert flows["east"][0][2] == 0
+    assert flows["west"][0][2] == 0
+
     """Wiring test: adapter output must plug directly into SUMO demand."""
     from flowsense.simulation import sim_config
 

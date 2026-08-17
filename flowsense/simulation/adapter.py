@@ -114,8 +114,20 @@ def aggregate_flows(
 ) -> dict[str, list[tuple[int, int, int]]]:
     """Convert FlowSense records into SUMO-compatible flow volumes per direction.
 
-    Uses 'crossings' deltas between time bins to compute vehicles/hour.
-    Falls back to 'per_lane' snapshot counts when crossings are unavailable.
+    Demand is derived from the **per-lane cumulative ``crossings`` counter**,
+    counting actual crossings as the sum of positive per-frame deltas. The
+    counter resets intermittently (process restart / wrap), which appears as a
+    negative step; we treat a reset as the counter wrapping to 0, so the
+    increment equals the post-reset value rather than being lost. This avoids
+    the previous bug where ``last - first`` over a bin with resets collapsed to
+    ~0 vph even under real traffic (Codex P1 review).
+
+    When the ``crossings`` field is absent entirely, falls back to the
+    authoritative per-frame ``total_vehicles`` (a real count, never an
+    occupancy snapshot) split across directions by observed ``per_lane``
+    occupancy *share* — occupancy is used only as a directional-split proxy,
+    never scaled directly to vph (P1-13: do not treat occupancy as a flow rate,
+    and do not fabricate traffic on silent directions).
 
     Args:
         records: FlowSense .jsonl records (sorted by ts).
@@ -132,57 +144,61 @@ def aggregate_flows(
 
     mapping = lane_map or DEFAULT_LANE_MAP
     first_ts = records[0]["ts"]
-    last_ts = records[-1]["ts"]
 
-    # Group records into time bins
+    # Group records into time bins (relative to first_ts).
     bins: dict[int, list[dict]] = defaultdict(list)
     for rec in records:
         bin_idx = (rec["ts"] - first_ts) // bin_seconds
         bins[bin_idx].append(rec)
 
-    # Build per-direction flow volumes
     result: dict[str, list[tuple[int, int, int]]] = {
         "north": [], "south": [], "east": [], "west": []
     }
 
     has_crossings = any("crossings" in r for r in records)
+    scale = 3600 / bin_seconds
 
-    sorted_bin_keys = sorted(bins.keys())
-    for bin_idx in sorted_bin_keys:
+    for bin_idx in sorted(bins):
         bin_records = bins[bin_idx]
         begin = int(bin_idx * bin_seconds)  # seconds relative to first_ts
         end = begin + bin_seconds
-
         direction_counts: dict[str, int] = defaultdict(int)
 
         if has_crossings:
-            # Use crossing deltas: last_crossings - first_crossings in this bin
-            first_rec = bin_records[0]
-            last_rec = bin_records[-1]
-            first_cross = first_rec.get("crossings", {})
-            last_cross = last_rec.get("crossings", {})
-
+            # Count actual crossings per lane: sum of positive per-frame
+            # deltas, with reset handling (negative step = counter wrapped).
             for lane_name, direction in mapping.items():
-                delta = last_cross.get(lane_name, 0) - first_cross.get(lane_name, 0)
-                direction_counts[direction] += max(0, delta)
+                prev: int | None = None
+                for rec in bin_records:
+                    cur = (rec.get("crossings") or {}).get(lane_name, 0)
+                    if prev is not None:
+                        delta = cur - prev
+                        if delta > 0:
+                            direction_counts[direction] += delta
+                        elif delta < 0:
+                            # Reset: counter wrapped to 0; the new baseline is
+                            # itself the vehicles counted since the reset.
+                            direction_counts[direction] += cur
+                    prev = cur
         else:
-            # FALLBACK (coarse estimate, NOT a true flow measurement):
-            # the per_lane snapshot is a count of vehicles *present* (occupancy),
-            # not a rate. We average it across the bin and label it explicitly as
-            # an estimate. We do NOT fabricate a minimum of 10 vph for directions
-            # that are genuinely empty (P1-13).
-            for rec in bin_records:
-                per_lane = rec.get("per_lane", {})
+            # No crossings field at all: use the per-frame total_vehicles
+            # (a genuine count) and split it by per_lane occupancy share.
+            bin_total = sum((rec.get("total_vehicles") or 0) for rec in bin_records)
+            last_per_lane = bin_records[-1].get("per_lane") or {}
+            occ = {lane_name: last_per_lane.get(lane_name, 0) for lane_name in mapping}
+            tot_occ = sum(occ.values())
+            if tot_occ > 0:
                 for lane_name, direction in mapping.items():
-                    direction_counts[direction] += per_lane.get(lane_name, 0)
-            n = len(bin_records)
-            if n > 0:
-                for d in direction_counts:
-                    direction_counts[d] = direction_counts[d] // n
+                    direction_counts[direction] += int(
+                        bin_total * occ[lane_name] / tot_occ
+                    )
+            elif bin_total:
+                # No directional signal: place the total on the first mapped
+                # lane rather than inventing four-way traffic.
+                first_dir = mapping[next(iter(mapping))]
+                direction_counts[first_dir] += bin_total
 
-        # Convert to vehicles/hour. Allow 0 for genuinely empty directions
-        # (P1-13): do not invent a minimum flow.
-        scale = 3600 / bin_seconds
+        # Convert to vehicles/hour. Genuinely empty directions stay 0 vph.
         for direction in result:
             vph = int(direction_counts.get(direction, 0) * scale)
             result[direction].append((begin, end, vph))
