@@ -23,3 +23,9 @@ simulation/map/build/
 
 # Ultralytics generated run outputs (eval/train curves, args)
 runs/
+
+# --- Foreign nested repos accidentally dropped into this tree ---
+# These are unrelated projects (each carries its own .git) and break pytest
+# collection / pollute the tree. They are NOT part of FlowSense.
+caveman/
+ponytail/

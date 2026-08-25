@@ -10,3 +10,9 @@ dependencies = []
 
 [tool.setuptools.packages.find]
 include = ["flowsense*"]
+
+[tool.pytest.ini_options]
+# Foreign nested repos accidentally dropped into this tree (caveman/, ponytail/)
+# are unrelated projects with their own test suites that fail to import here.
+# Exclude them from collection so a plain `pytest` run stays green.
+norecursedirs = ["caveman", "ponytail", ".git", "node_modules", "dist"]
