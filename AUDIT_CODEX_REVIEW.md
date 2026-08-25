@@ -140,9 +140,14 @@ it previously injected ~0/18):
   `test_aggregate_flows_silent_lanes_zero_on_real_data`,
   `test_aggregate_flows_fallback_uses_total_vehicles_not_occupancy`.
 
-Remaining (still open): P1-CI (install `requirements-dev.txt`), P2 items
-(analyzer synthetic congestion on real runs; stale `default_data_source`;
-unused `last_ts` in caller; unvalidated `--bin-seconds`).
+Remaining (still open): — none. All P2 items resolved (2026-08-25):
+- analyzer synthetic congestion on real runs → report labels real-data runs
+  `REAL:FlowSense-detections` instead of inheriting synthetic `--congested` dirs.
+- stale `default_data_source` → removed from `config/simulation_config.toml`.
+- unused `last_ts` in caller → already removed in P1 adapter rewrite.
+- unvalidated `--bin-seconds` → validated `> 0` (CLI `parser.error` + `ValueError`
+  in `aggregate_flows`); zero/negative now aborts instead of dividing by zero.
+- `rotate_detections()` → now called by `sync_now()`; covered by `tests/test_sync.py`.
 
 ### P1-CI (2026-08-17) — REMEDIATED
 

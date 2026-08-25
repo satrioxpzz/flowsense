@@ -95,6 +95,7 @@ class FlowSenseSyncManager:
 
     def sync_now(self):
         """Immediate full sync."""
+        self.rotate_detections()
         self.sync_configs()
         self.sync_models()
         self.sync_detections()

@@ -141,6 +141,8 @@ def aggregate_flows(
     """
     if not records:
         return {}
+    if bin_seconds <= 0:
+        raise ValueError(f"bin_seconds must be a positive integer, got {bin_seconds}")
 
     mapping = lane_map or DEFAULT_LANE_MAP
     first_ts = records[0]["ts"]

@@ -43,3 +43,14 @@ def test_parse_tripinfo_real_file(tmp_path):
     g = an._compute_global(vehicles)
     assert g["total_vehicles"] == 1
     assert g["avg_travel_time_s"] == 12.5
+
+
+def test_real_data_run_reports_real_not_synthetic_congestion():
+    """P2: a run driven by real FlowSense detections must not be reported as
+    synthetic congestion. The report's congested_directions must mark the
+    source explicitly as REAL, never inherit `--congested` synthetic dirs."""
+    data = an._build_report_data("Adaptive-Control", ["REAL:FlowSense-detections"])
+    assert data["congested_directions"] == ["REAL:FlowSense-detections"]
+    # The label must be clearly distinguishable from synthetic directions.
+    assert not any(d in ("north", "south", "east", "west")
+                   for d in data["congested_directions"])

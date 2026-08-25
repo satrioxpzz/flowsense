@@ -154,6 +154,19 @@ def test_aggregate_flows_fallback_uses_total_vehicles_not_occupancy():
     assert flows["east"][0][2] == 0
     assert flows["west"][0][2] == 0
 
+
+def test_aggregate_flows_rejects_non_positive_bin_seconds():
+    """P2: bin_seconds <= 0 must raise instead of dividing by zero."""
+    import pytest
+
+    records = [{"ts": 0, "crossings": {"kota": 0}}]
+    with pytest.raises(ValueError):
+        aggregate_flows(records, bin_seconds=0)
+    with pytest.raises(ValueError):
+        aggregate_flows(records, bin_seconds=-15)
+
+
+def test_adapter_output_plugs_into_sumo_demand():
     """Wiring test: adapter output must plug directly into SUMO demand."""
     from flowsense.simulation import sim_config
 

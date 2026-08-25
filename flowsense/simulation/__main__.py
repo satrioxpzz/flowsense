@@ -146,7 +146,11 @@ def run_once(use_adaptive: bool, congested: list[str], run_fast: bool = False,
             pass
 
     # 4. Reports
-    return print_simulation_report(mode_label=mode_label, congested=congested)
+    # When real FlowSense detections drive the demand, the report must not
+    # mislabel the run with synthetic congestion directions (P2: analyzer
+    # reporting synthetic congestion on real runs).
+    report_congested = ["REAL:FlowSense-detections"] if real_flows is not None else congested
+    return print_simulation_report(mode_label=mode_label, congested=report_congested)
 
 
 def main(argv=None):
@@ -183,6 +187,9 @@ def main(argv=None):
                         help="Time-bin size (s) when aggregating --from-connector data "
                              "(default 900 = 15 min).")
     args = parser.parse_args(argv)
+
+    if args.bin_seconds <= 0:
+        parser.error(f"--bin-seconds must be a positive integer (got {args.bin_seconds})")
 
     _require_traci()
 
